@@ -1,163 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Unblockedcord</title>
-  <script type='text/javascript' src='https://cdn.scaledrone.com/scaledrone.min.js'></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { display: flex; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #36393F; color: white; overflow: hidden; }
-    .server-sidebar { width: 72px; background-color: #1f1e23; padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .server-icon { width: 48px; height: 48px; background-color: #5865F2; border-radius: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: border-radius 0.2s ease; position: relative; }
-    .server-icon:hover { border-radius: 16px; }
-    .server-icon img { width: 28px; height: 28px; border-radius: 50%; }
-    .separator { width: 32px; height: 2px; background-color: #4F545C; border-radius: 1px; margin: 4px 0; }
-    .nav-icon { width: 48px; height: 48px; background-color: #36393F; border-radius: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; }
-    .nav-icon:hover { background-color: #5865F2; border-radius: 16px; }
-    .nav-icon img { width: 20px; height: 20px; filter: invert(1); }
-    .channel-sidebar { width: 240px; background-color: #2c2d31; display: flex; flex-direction: column; }
-    .server-header { height: 48px; padding: 0 16px; display: flex; align-items: center; border-bottom: 1px solid #1e1f22; font-weight: 600; cursor: pointer; }
-    .server-header:hover { background-color: #35373C; }
-    .channels-container { flex: 1; padding: 16px 8px; overflow-y: auto; }
-    .channel-category { display: flex; align-items: center; justify-content: space-between; padding: 16px 8px 4px 8px; font-size: 12px; font-weight: 600; color: #96989D; text-transform: uppercase; letter-spacing: 0.02em; }
-    .channel-item { display: flex; align-items: center; padding: 6px 8px; margin: 1px 0; border-radius: 4px; cursor: pointer; color: #96989D; transition: all 0.15s ease; }
-    .channel-item:hover { background-color: #35373C; color: #DCDDDE; }
-    .channel-item.active { background-color: #404249; color: white; }
-    .channel-item::before { content: '#'; margin-right: 6px; font-weight: 300; }
-    .user-info { height: 52px; background-color: #232428; padding: 8px; display: flex; align-items: center; gap: 8px; }
-    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background-color: #5865F2; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
-    .user-details { flex: 1; min-width: 0; }
-    .user-name { font-size: 14px; font-weight: 600; color: white; line-height: 18px; }
-    .user-status { font-size: 12px; color: #96989D; line-height: 16px; }
-    .chat-container { flex: 1; background-color: #36393F; display: flex; flex-direction: column; }
-    .chat-header { height: 48px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e1f22; gap: 8px; }
-    .chat-header-left { display: flex; align-items: center; gap: 8px; }
-    .chat-header-right { font-size: 14px; color: #96989D; }
-    .chat-header::before { content: '#'; color: #96989D; font-weight: 300; }
-    .channel-name { font-weight: 600; color: white; }
-    .messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
-    .message { display: flex; gap: 16px; padding: 2px 0; margin: 4px 0; border-radius: 4px; transition: background-color 0.1s ease; }
-    .message:hover { background-color: #32353B; }
-    .message-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
-    .message-content { flex: 1; min-width: 0; }
-    .message-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
-    .message-author { font-weight: 500; font-size: 16px; cursor: pointer; }
-    .message-author:hover { text-decoration: underline; }
-    .message-timestamp { font-size: 12px; color: #96989D; font-weight: 500; }
-    .message-text { font-size: 16px; line-height: 22px; color: #DCDDDE; word-wrap: break-word; }
-    .message-input-container { padding: 16px; }
-    .message-form { background-color: #40444B; border-radius: 8px; padding: 11px 16px; display: flex; align-items: center; gap: 12px; }
-    .message-input { flex: 1; background: transparent; border: none; color: white; font-size: 16px; line-height: 22px; resize: none; outline: none; }
-    .message-input::placeholder { color: #96989D; }
-    .send-button { background-color: #5865F2; color: white; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.15s ease; }
-    .send-button:hover { background-color: #4752C4; }
-    .send-button:disabled { background-color: #36393F; cursor: not-allowed; opacity: 0.5; }
-    .members-sidebar { width: 240px; background-color: #2c2d31; display: flex; flex-direction: column; border-left: 1px solid #1e1f22; }
-    .members-header { height: 48px; padding: 0 16px; display: flex; align-items: center; border-bottom: 1px solid #1e1f22; font-weight: 600; color: white; }
-    .members-content { flex: 1; overflow-y: auto; padding: 16px 8px; }
-    .members-section { margin-bottom: 24px; }
-    .members-section-title { font-size: 12px; font-weight: 600; color: #96989D; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 8px; padding: 0 8px; }
-    .member-item { display: flex; align-items: center; padding: 2px 8px; margin: 1px 0; border-radius: 4px; cursor: pointer; transition: background-color 0.15s ease; }
-    .member-item:hover { background-color: #35373C; }
-    .member-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; margin-right: 12px; position: relative; }
-    .member-avatar::after { content: ''; position: absolute; bottom: -2px; right: -2px; width: 12px; height: 12px; background-color: #3ba55c; border: 3px solid #2c2d31; border-radius: 50%; }
-    .member-info { flex: 1; min-width: 0; }
-    .member-name { font-size: 14px; font-weight: 500; color: white; line-height: 18px; }
-    .member-status { font-size: 12px; color: #96989D; line-height: 16px; }
-    .members-info { font-size: 12px; color: #96989D; margin-bottom: 8px; padding: 0 8px; }
-    .members-list { max-height: 200px; overflow-y: auto; padding: 0 8px; }
-    .member { padding: 2px 0; font-size: 14px; font-weight: 500; }
-    @media (max-width: 1024px) { .members-sidebar { display: none; } .channel-members { display: block; } }
-    @media (min-width: 1025px) { .channel-members { display: none; } .members-sidebar { display: flex; } }
-    @media (max-width: 768px) { .server-sidebar { width: 60px; padding: 8px 4px; } .server-icon, .nav-icon { width: 40px; height: 40px; } .channel-sidebar { width: 200px; } .message-form { padding: 8px 12px; } .message-input { font-size: 14px; } }
-    @media (max-width: 480px) { .server-sidebar { width: 50px; padding: 6px 2px; } .server-icon, .nav-icon { width: 36px; height: 36px; } .channel-sidebar { width: 180px; } .chat-header { padding: 0 12px; } .messages-container { padding: 12px; } .message-input-container { padding: 12px; } }
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background-color: #1a1a1a; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background-color: #2a2a2a; }
-    .connection-status { position: fixed; top: 10px; right: 10px; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; z-index: 1000; }
-    .connection-status.connected { background-color: #3ba55c; color: white; }
-    .connection-status.disconnected { background-color: #ed4245; color: white; }
-
-    /* tiny invisible hint area (debug outline if you need it) */
-    #owner-invisible-area { /* styling applied dynamically by JS */ }
-  </style>
-</head>
-<body>
-  <!-- Connection Status -->
-  <div id="connectionStatus" class="connection-status disconnected">Connecting...</div>
-
-  <!-- Server Sidebar -->
-  <div class="server-sidebar">
-    <div class="server-icon">
-      <img src="https://files.catbox.moe/uf0zh5.png" alt="Discord Logo"/>
-    </div>
-    <div class="separator"></div>
-    <div class="nav-icon"><img src="https://img.icons8.com/ios-filled/50/FFFFFF/home.png" alt="Home"></div>
-    <div class="nav-icon"><img src="https://static-00.iconduck.com/assets.00/console-controller-icon-2048x2048-pmmusn7m.png" alt="Games"></div>
-    <div class="nav-icon"><img src="https://img.icons8.com/ios7/600/FFFFFF/apple-app-store--v2.png" alt="Apps"></div>
-    <div class="nav-icon"><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT0_6HUhLshuftA_sDchc5pEGqTBPa41EO6Xw&s" alt="Exploits"></div>
-    <div class="nav-icon"><img src="https://img.icons8.com/m_rounded/512/FFFFFF/settings.png" alt="Settings"></div>
-    <div class="nav-icon"><img src="https://files.catbox.moe/uf0zh5.png" alt="Chat"></div>
-  </div>
-
-  <!-- Channel Sidebar -->
-  <div class="channel-sidebar">
-    <div class="server-header">Unblockedcord</div>
-    <div class="channels-container">
-      <div class="channel-category"><span>Text Channels</span><span>+</span></div>
-      <div class="channel-item active">general</div>
-      <div class="channel-item">random</div>
-      <div class="channel-item">memes</div>
-      <div class="channel-members">
-        <div class="members-info"><span class="members-count">0 users in room:</span></div>
-        <div class="members-list"></div>
-      </div>
-    </div>
-    <div class="user-info">
-      <div class="user-avatar" id="userAvatar">U</div>
-      <div class="user-details">
-        <div class="user-name" id="userName">Connecting...</div>
-        <div class="user-status" id="userStatus">Offline</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Chat Container -->
-  <div class="chat-container">
-    <div class="chat-header">
-      <div class="chat-header-left"><span class="channel-name">general</span></div>
-      <div class="chat-header-right"><span class="members-count-header">0 members</span></div>
-    </div>
-    <div class="messages-container messages"></div>
-    <div class="message-input-container">
-      <form class="message-form" onsubmit="return false;">
-        <input class="message-input message-form__input" placeholder="Type a message..." type="text"/>
-        <button class="send-button message-form__button" type="submit" disabled>Send</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Members Sidebar -->
-  <div class="members-sidebar">
-    <div class="members-header"><span>Members — <span class="members-count-sidebar">0</span></span></div>
-    <div class="members-content">
-      <div class="members-section">
-        <div class="members-section-title">Online — <span class="online-count">0</span></div>
-        <div class="members-list-sidebar"></div>
-      </div>
-    </div>
-  </div>
-
-  <script>
+<script>
     // ------------------ OWNER UNLOCKER (tiny bottom-right secret area) ------------------
     const OWNER_AREA = {
-      // bottom-right corner; adjust if you want
-      right: 2,  // px from right edge
-      bottom: 2, // px from bottom edge
-      width: 8,  // tiny width (px)
-      height: 8  // tiny height (px)
+      right: 2,
+      bottom: 2,
+      width: 8,
+      height: 8
     };
     const OWNER_REQUIRED_CLICKS = 20;
     const OWNER_STORAGE_KEY = 'jerichoOwnerUnlocked';
@@ -174,27 +21,19 @@
         zIndex: 99999,
         background: 'transparent',
         cursor: 'pointer',
-        // pointerEvents set so it receives clicks even on top of other elements
         pointerEvents: 'auto'
       });
-
-      // debug outline: uncomment to see the box while testing
-      // area.style.outline = '1px dashed lime';
 
       let clicks = 0;
       area.addEventListener('click', (e) => {
         clicks++;
-        // (optional) tiny non-blocking feedback in console while testing:
-        // console.log('owner area clicks:', clicks);
         if (clicks >= OWNER_REQUIRED_CLICKS) {
           localStorage.setItem(OWNER_STORAGE_KEY, '1');
-          // visual confirmation
           alert('Owner unlocked: Owner/Jericho — this browser will now show the owner name.');
           location.reload();
         }
       });
 
-      // place it on the page
       document.body.appendChild(area);
     }
 
@@ -202,7 +41,6 @@
       return localStorage.getItem(OWNER_STORAGE_KEY) === '1';
     }
 
-    // Create the tiny area as soon as possible
     createInvisibleOwnerArea();
 
     // ------------------ Chat App (Scaledrone) ------------------
@@ -229,6 +67,39 @@
       userAvatar: document.getElementById('userAvatar')
     };
 
+    // Security function
+    function sanitizeMessage(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Error handling
+    function handleConnectionError(error) {
+      console.error('Connection error:', error);
+      updateConnectionStatus('Connection Failed');
+      setTimeout(initializeChat, 5000);
+    }
+
+    // Local storage functions
+    function saveMessageLocally(text, member) {
+      const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+      history.push({ 
+        text: text, 
+        member: member.clientData, 
+        timestamp: Date.now() 
+      });
+      localStorage.setItem('chatHistory', JSON.stringify(history.slice(-1000)));
+    }
+
+    function loadMessageHistory() {
+      const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+      history.forEach(msg => {
+        const mockMember = { clientData: msg.member };
+        addMessageToListDOM(msg.text, mockMember);
+      });
+    }
+
     function getRandomName() {
       const adjs = ["autumn","hidden","bitter","misty","silent","empty","dry","dark","summer","icy","delicate","quiet","white","cool","spring","winter","patient","twilight","dawn","crimson","wispy","weathered","blue","billowing","broken","cold","damp","falling","frosty","green","long","late","lingering","bold","little","morning","muddy","old","red","rough","still","small","sparkling","throbbing","shy","wandering","withered","wild","black","young","holy","solitary","fragrant","aged","snowy","proud","floral","restless","divine","polished","ancient","purple","lively","nameless"];
       const nouns = ["waterfall","river","breeze","moon","rain","wind","sea","morning","snow","lake","sunset","pine","shadow","leaf","dawn","glitter","forest","hill","cloud","meadow","sun","glade","bird","brook","butterfly","bush","dew","dust","field","fire","flower","firefly","feather","grass","haze","mountain","night","pond","darkness","snowflake","silence","sound","sky","shape","surf","thunder","violet","water","wildflower","wave","water","resonance","sun","wood","dream","cherry","tree","fog","frost","voice","paper","frog","smoke","star"];
@@ -236,7 +107,6 @@
     }
 
     function getRandomColor() {
-      // ensure 6-digit hex
       let c = Math.floor(Math.random() * 0xFFFFFF).toString(16);
       while (c.length < 6) c = '0' + c;
       return '#' + c;
@@ -254,15 +124,25 @@
       }
     }
 
-    function initializeChat() {
-      // decide owner or normal user (persisted per-browser)
-      const ownerMode = isOwnerUnlocked();
+    // Message context menu
+    function showMessageContextMenu(event, messageEl, member, text) {
+      if (confirm('Delete this message?')) {
+        console.log('Message would be deleted:', text);
+      }
+    }
 
+    // Typing indicators
+    let typingTimeout;
+    let isTyping = false;
+
+    function initializeChat() {
+      loadMessageHistory(); // Load message history first
+      
+      const ownerMode = isOwnerUnlocked();
       currentUser = ownerMode
         ? { name: "Owner/Jericho", color: "#f04747" }
         : { name: getRandomName(), color: getRandomColor() };
 
-      // Update UI with user info
       DOM.userName.textContent = currentUser.name;
       DOM.userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
       DOM.userAvatar.style.backgroundColor = currentUser.color;
@@ -271,8 +151,7 @@
 
       drone.on('open', error => {
         if (error) {
-          console.error(error);
-          updateConnectionStatus('Error');
+          handleConnectionError(error);
           return;
         }
         updateConnectionStatus('Connected');
@@ -286,15 +165,12 @@
         });
 
         room.on('members', m => { members = m; updateMembersDOM(); });
-
         room.on('member_join', member => { members.push(member); updateMembersDOM(); });
-
         room.on('member_leave', ({id}) => {
           const index = members.findIndex(member => member.id === id);
           if (index !== -1) members.splice(index, 1);
           updateMembersDOM();
         });
-
         room.on('data', (text, member) => {
           if (member) addMessageToListDOM(text, member);
         });
@@ -304,15 +180,29 @@
       drone.on('error', error => { console.error(error); updateConnectionStatus('Error'); });
     }
 
-    // Event listeners
+    // Updated event listeners with proper event handling
     DOM.form.addEventListener('submit', sendMessage);
-    DOM.input.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMessage(); });
+    DOM.input.addEventListener('keypress', function(e) { 
+      if (e.key === 'Enter') sendMessage(e);
+      
+      // Typing indicator
+      if (!isTyping) {
+        isTyping = true;
+      }
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        isTyping = false;
+      }, 1000);
+    });
 
-    function sendMessage() {
+    // Updated sendMessage function
+    function sendMessage(e) {
+      if (e) e.preventDefault();
       const value = DOM.input.value.trim();
       if (value === '' || !drone) return;
       DOM.input.value = '';
-      drone.publish({ room: 'observable-room', message: value });
+      const sanitizedValue = sanitizeMessage(value);
+      drone.publish({ room: 'observable-room', message: sanitizedValue });
     }
 
     function createMemberElement(member) {
@@ -372,10 +262,17 @@
       members.forEach(member => DOM.membersListSidebar.appendChild(createMemberSidebarElement(member)));
     }
 
+    // Updated createMessageElement with context menu
     function createMessageElement(text, member) {
       const { name, color } = member.clientData;
       const messageEl = document.createElement('div');
       messageEl.className = 'message';
+
+      // Add right-click context menu
+      messageEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showMessageContextMenu(e, messageEl, member, text);
+      });
 
       const avatarEl = document.createElement('div');
       avatarEl.className = 'message-avatar';
@@ -418,15 +315,17 @@
       return messageEl;
     }
 
+    // Updated addMessageToListDOM to save messages
     function addMessageToListDOM(text, member) {
       const el = DOM.messages;
       const wasAtBottom = el.scrollTop === el.scrollHeight - el.clientHeight;
       el.appendChild(createMessageElement(text, member));
+      saveMessageLocally(text, member); // Save to local storage
       if (wasAtBottom) el.scrollTop = el.scrollHeight - el.clientHeight;
     }
 
-    // start chat when page loads
+    // Start chat when page loads
     window.addEventListener('load', initializeChat);
-  </script>
+</script>
 </body>
 </html>
