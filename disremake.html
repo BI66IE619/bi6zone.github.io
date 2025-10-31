@@ -425,13 +425,6 @@
       if (wasAtBottom) el.scrollTop = el.scrollHeight - el.clientHeight;
     }
 
-    // Save messages locally for persistence
-function saveMessageLocally(message, member) {
-  const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-  history.push({ text: message, member: member.clientData, timestamp: Date.now() });
-  localStorage.setItem('chatHistory', JSON.stringify(history.slice(-1000))); // Keep last 1000 messages
-    }
-
     // start chat when page loads
     window.addEventListener('load', initializeChat);
   </script>
