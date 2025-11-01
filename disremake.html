@@ -150,25 +150,24 @@
     </div>
   </div>
 
-  <script>
+ <script>
 /**************************************************************************
- Combined features (fixed):
+ Combined features:
  - Multi-room (click channel items to switch)
  - Per-room localStorage chat saving + load
  - Clear current room button
  - Invisible bottom-right 20-click Owner unlock
  - Scaledrone realtime messaging
+ - Image sending via base64
  - NO typing indicators
- - Fix: messages no longer send twice
-***************************************************************************/
+ ***************************************************************************/
 
 // ========== CONFIG ==========
-const CLIENT_ID = 'hWmT5ZuGe51IgiMD';
+const CLIENT_ID = 'hWmT5ZuGe51IgiMD'; // existing client id
 const OWNER_AREA = { right: 2, bottom: 2, width: 8, height: 8 };
 const OWNER_REQUIRED_CLICKS = 20;
 const OWNER_STORAGE_KEY = 'jerichoOwnerUnlocked';
-const CHAT_STORAGE_KEY_BASE = 'unblockedcord_chat_history';
-
+const CHAT_STORAGE_KEY_BASE = 'unblockedcord_chat_history'; // base; actual key is base_roomName
 let currentRoomName = 'general';
 let drone = null;
 let currentRoom = null;
@@ -225,9 +224,7 @@ function isOwnerUnlocked() { return localStorage.getItem(OWNER_STORAGE_KEY) === 
 createInvisibleOwnerArea();
 
 // ========== UTIL ==========
-function getRoomStorageKey(roomName) {
-  return `${CHAT_STORAGE_KEY_BASE}_${roomName}`;
-}
+function getRoomStorageKey(roomName) { return `${CHAT_STORAGE_KEY_BASE}_${roomName}`; }
 function getRandomName() {
   const adjs = ["autumn","hidden","bitter","misty","silent","empty","dry","dark","summer","icy","delicate","quiet","white","cool","spring","winter","patient","twilight","dawn","crimson","wispy","weathered","blue","billowing","broken","cold","damp","falling","frosty","green","long","late","lingering","bold","little","morning","muddy","old","red","rough","still","small","sparkling","throbbing","shy","wandering","withered","wild","black","young","holy","solitary","fragrant","aged","snowy","proud","floral","restless","divine","polished","ancient","purple","lively","nameless"];
   const nouns = ["waterfall","river","breeze","moon","rain","wind","sea","morning","snow","lake","sunset","pine","shadow","leaf","dawn","glitter","forest","hill","cloud","meadow","sun","glade","bird","brook","butterfly","bush","dew","dust","field","fire","flower","firefly","feather","grass","haze","mountain","night","pond","darkness","snowflake","silence","sound","sky","shape","surf","thunder","violet","water","wildflower","wave","water","resonance","sun","wood","dream","cherry","tree","fog","frost","voice","paper","frog","smoke","star"];
@@ -239,7 +236,7 @@ function getRandomColor() {
   return '#' + c;
 }
 
-// ========== UI ==========
+// ========== UI: connection status & clear button ==========
 function updateConnectionStatus(status) {
   DOM.connectionStatus.textContent = status;
   DOM.connectionStatus.className = `connection-status ${status === 'Connected' ? 'connected' : 'disconnected'}`;
@@ -264,7 +261,7 @@ clearBtn.addEventListener('click', () => {
 DOM.chatHeader.querySelector('.chat-header-right').appendChild(clearBtn);
 
 // ========== Message DOM helpers ==========
-function createMessageElement(text, authorName, color, isoTime) {
+function createMessageElement(textOrBase64, authorName, color, isoTime, isImage=false) {
   const messageEl = document.createElement('div');
   messageEl.className = 'message';
 
@@ -293,38 +290,42 @@ function createMessageElement(text, authorName, color, isoTime) {
   }
   timestampEl.textContent = timeText;
 
-  const textEl = document.createElement('div');
-  textEl.className = 'message-text';
-  textEl.textContent = text;
-
   headerEl.appendChild(authorEl);
   headerEl.appendChild(timestampEl);
   contentEl.appendChild(headerEl);
-  contentEl.appendChild(textEl);
 
+  const textEl = document.createElement('div');
+  textEl.className = 'message-text';
+  if (isImage) {
+    const img = document.createElement('img');
+    img.src = textOrBase64;
+    img.style.maxWidth = '200px';
+    img.style.maxHeight = '200px';
+    img.style.borderRadius = '8px';
+    textEl.appendChild(img);
+  } else {
+    textEl.textContent = textOrBase64;
+  }
+  contentEl.appendChild(textEl);
   messageEl.appendChild(avatarEl);
   messageEl.appendChild(contentEl);
   return messageEl;
 }
 
-function addMessageToListDOM(text, authorName, color, isoTime) {
+function addMessageToListDOM(content, authorName, color, isoTime, isImage=false) {
   const wasAtBottom = DOM.messages.scrollTop >= (DOM.messages.scrollHeight - DOM.messages.clientHeight - 20);
-  DOM.messages.appendChild(createMessageElement(text, authorName, color, isoTime));
-  if (wasAtBottom) {
-    DOM.messages.scrollTop = DOM.messages.scrollHeight - DOM.messages.clientHeight;
-  }
+  DOM.messages.appendChild(createMessageElement(content, authorName, color, isoTime, isImage));
+  if (wasAtBottom) DOM.messages.scrollTop = DOM.messages.scrollHeight - DOM.messages.clientHeight;
 }
 
-// ========== Local storage helpers (per-room) ==========
-function saveMessageToLocal(text, name, color, roomName, isoTime) {
+// ========== Local storage helpers ==========
+function saveMessageToLocal(content, name, color, roomName, isoTime, isImage=false) {
   try {
     const key = getRoomStorageKey(roomName);
     const history = JSON.parse(localStorage.getItem(key) || '[]');
-    history.push({ text, name, color, time: isoTime || new Date().toISOString() });
+    history.push({ type: isImage ? 'image' : 'text', text: content, name, color, time: isoTime || new Date().toISOString() });
     localStorage.setItem(key, JSON.stringify(history));
-  } catch (e) {
-    console.error('Failed saving message locally', e);
-  }
+  } catch(e) { console.error('Failed saving message locally', e); }
 }
 
 function loadChatHistoryForRoom(roomName) {
@@ -332,46 +333,31 @@ function loadChatHistoryForRoom(roomName) {
   const key = getRoomStorageKey(roomName);
   const history = JSON.parse(localStorage.getItem(key) || '[]');
   history.forEach(item => {
-    addMessageToListDOM(item.text, item.name, item.color, item.time);
+    addMessageToListDOM(item.text, item.name, item.color, item.time, item.type === 'image');
   });
 }
 
 // ========== Scaledrone handling ==========
 function initializeScaledroneAndJoin() {
   const ownerMode = isOwnerUnlocked();
-  currentUser = ownerMode
-    ? { name: 'Owner/Jericho', color: '#f04747' }
-    : { name: getRandomName(), color: getRandomColor() };
-
+  currentUser = ownerMode ? { name: 'Owner/Jericho', color: '#f04747' } : { name: getRandomName(), color: getRandomColor() };
   DOM.userName.textContent = currentUser.name;
   DOM.userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
   DOM.userAvatar.style.backgroundColor = currentUser.color;
 
-  // connect once
   drone = new ScaleDrone(CLIENT_ID, { data: currentUser });
 
   drone.on('open', err => {
-    if (err) {
-      console.error(err);
-      updateConnectionStatus('Error');
-      return;
-    }
+    if (err) { console.error(err); updateConnectionStatus('Error'); return; }
     updateConnectionStatus('Connected');
     joinRoom(currentRoomName);
   });
-
   drone.on('close', () => updateConnectionStatus('Disconnected'));
   drone.on('error', () => updateConnectionStatus('Error'));
 }
 
 function joinRoom(roomName) {
-  // unsubscribe previous
-  try {
-    if (currentRoom && typeof currentRoom.unsubscribe === 'function') {
-      currentRoom.unsubscribe();
-    }
-  } catch (e) { console.warn('unsubscribe error', e); }
-
+  if (currentRoom && typeof currentRoom.unsubscribe === 'function') currentRoom.unsubscribe();
   DOM.channelName.textContent = roomName;
   loadChatHistoryForRoom(roomName);
   members = [];
@@ -379,52 +365,41 @@ function joinRoom(roomName) {
 
   currentRoom = drone.subscribe(`observable-${roomName}`);
 
-  currentRoom.on('open', err => {
-    if (err) console.error('Room open error', err);
-  });
+  currentRoom.on('members', m => { members = m; updateMembersDOM(); });
+  currentRoom.on('member_join', m => { members.push(m); updateMembersDOM(); });
+  currentRoom.on('member_leave', ({id}) => { const i = members.findIndex(x=>x.id===id); if(i!==-1) members.splice(i,1); updateMembersDOM(); });
 
-  currentRoom.on('members', m => {
-    members = m;
-    updateMembersDOM();
-  });
-
-  currentRoom.on('member_join', member => {
-    members.push(member);
-    updateMembersDOM();
-  });
-
-  currentRoom.on('member_leave', ({ id }) => {
-    const i = members.findIndex(x => x.id === id);
-    if (i !== -1) members.splice(i, 1);
-    updateMembersDOM();
-  });
-
-  // single data handler: append & save (this prevents double-appending)
   currentRoom.on('data', (message, member) => {
     if (!member) return;
-    const name = member.clientData && member.clientData.name ? member.clientData.name : 'Someone';
-    const color = member.clientData && member.clientData.color ? member.clientData.color : '#5865F2';
-    const text = String(message);
-    const timeIso = new Date().toISOString();
-    addMessageToListDOM(text, name, color, timeIso);
-    saveMessageToLocal(text, name, color, roomName, timeIso);
+    const name = member.clientData?.name || 'Someone';
+    const color = member.clientData?.color || '#5865F2';
+    if (typeof message === 'object' && message.type === 'image') {
+      addMessageToListDOM(message.data, name, color, new Date().toISOString(), true);
+      saveMessageToLocal(message.data, name, color, currentRoomName, new Date().toISOString(), true);
+    } else {
+      addMessageToListDOM(String(message), name, color, new Date().toISOString());
+      saveMessageToLocal(String(message), name, color, currentRoomName, new Date().toISOString());
+    }
   });
 }
 
-// ========== Sending messages (FIXED) ==========
-function sendMessage() {
-  const value = DOM.input.value.trim();
-  if (!value || !drone || !currentRoom) return;
-  DOM.input.value = '';
-  // publish only — DO NOT append/save here (room.on('data') will handle it once)
-  drone.publish({ room: `observable-${currentRoomName}`, message: value });
+// ========== Sending messages ==========
+function sendMessage(content, isImage=false) {
+  if (!content || !drone || !currentRoom) return;
+
+  const messageObj = isImage ? { type: 'image', data: content } : { type: 'text', data: content };
+  drone.publish({ room: `observable-${currentRoomName}`, message: messageObj });
+
+  addMessageToListDOM(content, currentUser.name, currentUser.color, new Date().toISOString(), isImage);
+  saveMessageToLocal(content, currentUser.name, currentUser.color, currentRoomName, new Date().toISOString(), isImage);
+
+  if (!isImage) DOM.input.value = '';
 }
 
 // ========== Members DOM ==========
 function createMemberSidebarElement(member) {
-  const name = member.clientData && member.clientData.name ? member.clientData.name : 'Unknown';
-  const color = member.clientData && member.clientData.color ? member.clientData.color : '#5865F2';
-
+  const name = member.clientData?.name || 'Unknown';
+  const color = member.clientData?.color || '#5865F2';
   const memberEl = document.createElement('div');
   memberEl.className = 'member-item';
 
@@ -465,9 +440,9 @@ function updateMembersDOM() {
       DOM.membersListSidebar.appendChild(createMemberSidebarElement(m));
       const el = document.createElement('div');
       el.className = 'member';
-      el.textContent = (m.clientData && m.clientData.name) || 'Unknown';
+      el.textContent = m.clientData?.name || 'Unknown';
       DOM.membersList.appendChild(el);
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
   });
   const count = members.length;
   DOM.membersCount.textContent = `${count} users in room:`;
@@ -476,29 +451,52 @@ function updateMembersDOM() {
   DOM.onlineCount.textContent = count;
 }
 
-// ========== Channel switching UI ==========
+// ========== Channel switching ==========
 function wireChannelItems() {
-  const items = document.querySelectorAll('.channel-item');
-  items.forEach(it => {
-    it.addEventListener('click', () => {
-      if (it.classList.contains('active')) return;
-      items.forEach(x => x.classList.remove('active'));
-      it.classList.add('active');
-      const name = it.textContent.trim();
-      currentRoomName = name;
-      joinRoom(currentRoomName);
+  document.querySelectorAll('.channel-item').forEach(item => {
+    item.addEventListener('click', e => {
+      const room = item.dataset.room;
+      if (!room || room === currentRoomName) return;
+      currentRoomName = room;
+      joinRoom(room);
     });
   });
 }
 
-// ========== Event listeners (attach once) ==========
-DOM.form.addEventListener('submit', e => { e.preventDefault(); sendMessage(); });
-DOM.input.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+// ========== Image upload ==========
+const imageInput = document.createElement('input');
+imageInput.type = 'file';
+imageInput.accept = 'image/*';
+imageInput.style.display = 'none';
+DOM.form.appendChild(imageInput);
 
-// ========== Init ==========
-window.addEventListener('load', () => {
-  wireChannelItems();
-  initializeScaledroneAndJoin();
-  loadChatHistoryForRoom(currentRoomName);
+const imageButton = document.createElement('button');
+imageButton.type = 'button';
+imageButton.textContent = '📷';
+imageButton.style.background = 'none';
+imageButton.style.border = 'none';
+imageButton.style.color = 'white';
+imageButton.style.fontSize = '18px';
+imageButton.style.cursor = 'pointer';
+imageButton.addEventListener('click', () => imageInput.click());
+DOM.form.insertBefore(imageButton, DOM.sendButton);
+
+imageInput.addEventListener('change', () => {
+  if (!imageInput.files || !imageInput.files[0]) return;
+  const file = imageInput.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result;
+    sendMessage(base64, true);
+  };
+  reader.readAsDataURL(file);
+  imageInput.value = '';
 });
+
+// ========== Form submit ==========
+DOM.form.addEventListener('submit', e => { e.preventDefault(); sendMessage(DOM.input.value); });
+
+// ========== INIT ==========
+initializeScaledroneAndJoin();
+wireChannelItems();
 </script>
