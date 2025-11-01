@@ -151,376 +151,354 @@
   </div>
 
   <script>
-  /**************************************************************************
-   Combined features:
-   - Multi-room (click channel items to switch)
-   - Per-room localStorage chat saving + load
-   - Clear current room button
-   - Invisible bottom-right 20-click Owner unlock
-   - Scaledrone realtime messaging
-   - NO typing indicators
-  ***************************************************************************/
+/**************************************************************************
+ Combined features (fixed):
+ - Multi-room (click channel items to switch)
+ - Per-room localStorage chat saving + load
+ - Clear current room button
+ - Invisible bottom-right 20-click Owner unlock
+ - Scaledrone realtime messaging
+ - NO typing indicators
+ - Fix: messages no longer send twice
+***************************************************************************/
 
-  // ========== CONFIG ==========
-  const CLIENT_ID = 'hWmT5ZuGe51IgiMD'; // existing client id
-  const OWNER_AREA = { right: 2, bottom: 2, width: 8, height: 8 };
-  const OWNER_REQUIRED_CLICKS = 20;
-  const OWNER_STORAGE_KEY = 'jerichoOwnerUnlocked';
-  const CHAT_STORAGE_KEY_BASE = 'unblockedcord_chat_history'; // base; actual key is base_roomName
-  // initial room
-  let currentRoomName = 'general';
-  // runtime
-  let drone = null;
-  let currentRoom = null; // Scaledrone room object
-  let members = [];
-  let currentUser = null;
+// ========== CONFIG ==========
+const CLIENT_ID = 'hWmT5ZuGe51IgiMD';
+const OWNER_AREA = { right: 2, bottom: 2, width: 8, height: 8 };
+const OWNER_REQUIRED_CLICKS = 20;
+const OWNER_STORAGE_KEY = 'jerichoOwnerUnlocked';
+const CHAT_STORAGE_KEY_BASE = 'unblockedcord_chat_history';
 
-  // ========== DOM ==========
-  const DOM = {
-    messages: document.querySelector('.messages'),
-    input: document.querySelector('#messageInput'),
-    form: document.querySelector('.message-form'),
-    sendButton: document.querySelector('.message-form__button'),
-    connectionStatus: document.getElementById('connectionStatus'),
-    userName: document.getElementById('userName'),
-    userAvatar: document.getElementById('userAvatar'),
-    userStatus: document.getElementById('userStatus'),
-    membersCount: document.querySelector('.members-count'),
-    membersList: document.querySelector('.members-list'),
-    membersListSidebar: document.querySelector('.members-list-sidebar'),
-    membersCountHeader: document.querySelector('.members-count-header'),
-    membersCountSidebar: document.querySelector('.members-count-sidebar'),
-    onlineCount: document.querySelector('.online-count'),
-    channelName: document.querySelector('.channel-name'),
-    chatHeader: document.querySelector('.chat-header'),
-  };
+let currentRoomName = 'general';
+let drone = null;
+let currentRoom = null;
+let members = [];
+let currentUser = null;
 
-  // ========== OWNER UNLOCK AREA ==========
-  function createInvisibleOwnerArea() {
-    const area = document.createElement('div');
-    area.id = 'owner-invisible-area';
-    Object.assign(area.style, {
-      position: 'fixed',
-      right: OWNER_AREA.right + 'px',
-      bottom: OWNER_AREA.bottom + 'px',
-      width: OWNER_AREA.width + 'px',
-      height: OWNER_AREA.height + 'px',
-      zIndex: 99999,
-      background: 'transparent',
-      cursor: 'pointer',
-      pointerEvents: 'auto'
-    });
-    let clicks = 0;
-    area.addEventListener('click', () => {
-      clicks++;
-      if (clicks >= OWNER_REQUIRED_CLICKS) {
-        localStorage.setItem(OWNER_STORAGE_KEY, '1');
-        alert('Owner unlocked: Owner/Jericho — this browser will now show the owner name.');
-        location.reload();
-      }
-    });
-    document.body.appendChild(area);
-  }
-  function isOwnerUnlocked() { return localStorage.getItem(OWNER_STORAGE_KEY) === '1'; }
-  createInvisibleOwnerArea();
+// ========== DOM ==========
+const DOM = {
+  messages: document.querySelector('.messages'),
+  input: document.querySelector('#messageInput'),
+  form: document.querySelector('.message-form'),
+  sendButton: document.querySelector('.message-form__button'),
+  connectionStatus: document.getElementById('connectionStatus'),
+  userName: document.getElementById('userName'),
+  userAvatar: document.getElementById('userAvatar'),
+  userStatus: document.getElementById('userStatus'),
+  membersCount: document.querySelector('.members-count'),
+  membersList: document.querySelector('.members-list'),
+  membersListSidebar: document.querySelector('.members-list-sidebar'),
+  membersCountHeader: document.querySelector('.members-count-header'),
+  membersCountSidebar: document.querySelector('.members-count-sidebar'),
+  onlineCount: document.querySelector('.online-count'),
+  channelName: document.querySelector('.channel-name'),
+  chatHeader: document.querySelector('.chat-header'),
+};
 
-  // ========== UTIL ==========
-  function getRoomStorageKey(roomName) {
-    return `${CHAT_STORAGE_KEY_BASE}_${roomName}`;
-  }
-
-  function getRandomName() {
-    const adjs = ["autumn","hidden","bitter","misty","silent","empty","dry","dark","summer","icy","delicate","quiet","white","cool","spring","winter","patient","twilight","dawn","crimson","wispy","weathered","blue","billowing","broken","cold","damp","falling","frosty","green","long","late","lingering","bold","little","morning","muddy","old","red","rough","still","small","sparkling","throbbing","shy","wandering","withered","wild","black","young","holy","solitary","fragrant","aged","snowy","proud","floral","restless","divine","polished","ancient","purple","lively","nameless"];
-    const nouns = ["waterfall","river","breeze","moon","rain","wind","sea","morning","snow","lake","sunset","pine","shadow","leaf","dawn","glitter","forest","hill","cloud","meadow","sun","glade","bird","brook","butterfly","bush","dew","dust","field","fire","flower","firefly","feather","grass","haze","mountain","night","pond","darkness","snowflake","silence","sound","sky","shape","surf","thunder","violet","water","wildflower","wave","water","resonance","sun","wood","dream","cherry","tree","fog","frost","voice","paper","frog","smoke","star"];
-    return adjs[Math.floor(Math.random()*adjs.length)] + "_" + nouns[Math.floor(Math.random()*nouns.length)];
-  }
-  function getRandomColor() {
-    let c = Math.floor(Math.random()*0xFFFFFF).toString(16);
-    while (c.length < 6) c = '0' + c;
-    return '#' + c;
-  }
-
-  // ========== UI: connection status & clear button ==========
-  function updateConnectionStatus(status) {
-    DOM.connectionStatus.textContent = status;
-    DOM.connectionStatus.className = `connection-status ${status === 'Connected' ? 'connected' : 'disconnected'}`;
-    DOM.sendButton.disabled = status !== 'Connected';
-    DOM.userStatus.textContent = status === 'Connected' ? 'Online' : 'Offline';
-  }
-
-  // clear button (per-room)
-  const clearBtn = document.createElement('button');
-  clearBtn.textContent = '🗑️ Clear Chat';
-  clearBtn.style.background = 'none';
-  clearBtn.style.border = 'none';
-  clearBtn.style.color = '#ED4245';
-  clearBtn.style.fontWeight = '600';
-  clearBtn.style.cursor = 'pointer';
-  clearBtn.style.fontSize = '14px';
-  clearBtn.addEventListener('click', () => {
-    if (!confirm(`Clear saved chat for "${currentRoomName}"?`)) return;
-    localStorage.removeItem(getRoomStorageKey(currentRoomName));
-    DOM.messages.innerHTML = '';
+// ========== OWNER UNLOCK AREA ==========
+function createInvisibleOwnerArea() {
+  const area = document.createElement('div');
+  area.id = 'owner-invisible-area';
+  Object.assign(area.style, {
+    position: 'fixed',
+    right: OWNER_AREA.right + 'px',
+    bottom: OWNER_AREA.bottom + 'px',
+    width: OWNER_AREA.width + 'px',
+    height: OWNER_AREA.height + 'px',
+    zIndex: 99999,
+    background: 'transparent',
+    cursor: 'pointer',
+    pointerEvents: 'auto'
   });
-  // place the clear button into the header right area
-  DOM.chatHeader.querySelector('.chat-header-right').appendChild(clearBtn);
-
-  // ========== Message DOM helpers ==========
-  function createMessageElement(text, authorName, color, isoTime) {
-    const messageEl = document.createElement('div');
-    messageEl.className = 'message';
-
-    const avatarEl = document.createElement('div');
-    avatarEl.className = 'message-avatar';
-    avatarEl.style.backgroundColor = color || '#5865F2';
-    avatarEl.textContent = (authorName && authorName.charAt(0).toUpperCase()) || '?';
-
-    const contentEl = document.createElement('div');
-    contentEl.className = 'message-content';
-
-    const headerEl = document.createElement('div');
-    headerEl.className = 'message-header';
-
-    const authorEl = document.createElement('span');
-    authorEl.className = 'message-author';
-    authorEl.style.color = color || '#DCDDDE';
-    authorEl.textContent = authorName || 'Unknown';
-    if (authorName === 'Owner/Jericho') authorEl.textContent += ' 👑';
-
-    const timestampEl = document.createElement('span');
-    timestampEl.className = 'message-timestamp';
-    let timeText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (isoTime) {
-      try { timeText = new Date(isoTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch(e){}
+  let clicks = 0;
+  area.addEventListener('click', () => {
+    clicks++;
+    if (clicks >= OWNER_REQUIRED_CLICKS) {
+      localStorage.setItem(OWNER_STORAGE_KEY, '1');
+      alert('Owner unlocked: Owner/Jericho — this browser will now show the owner name.');
+      location.reload();
     }
-    timestampEl.textContent = timeText;
+  });
+  document.body.appendChild(area);
+}
+function isOwnerUnlocked() { return localStorage.getItem(OWNER_STORAGE_KEY) === '1'; }
+createInvisibleOwnerArea();
 
-    const textEl = document.createElement('div');
-    textEl.className = 'message-text';
-    textEl.textContent = text;
+// ========== UTIL ==========
+function getRoomStorageKey(roomName) {
+  return `${CHAT_STORAGE_KEY_BASE}_${roomName}`;
+}
+function getRandomName() {
+  const adjs = ["autumn","hidden","bitter","misty","silent","empty","dry","dark","summer","icy","delicate","quiet","white","cool","spring","winter","patient","twilight","dawn","crimson","wispy","weathered","blue","billowing","broken","cold","damp","falling","frosty","green","long","late","lingering","bold","little","morning","muddy","old","red","rough","still","small","sparkling","throbbing","shy","wandering","withered","wild","black","young","holy","solitary","fragrant","aged","snowy","proud","floral","restless","divine","polished","ancient","purple","lively","nameless"];
+  const nouns = ["waterfall","river","breeze","moon","rain","wind","sea","morning","snow","lake","sunset","pine","shadow","leaf","dawn","glitter","forest","hill","cloud","meadow","sun","glade","bird","brook","butterfly","bush","dew","dust","field","fire","flower","firefly","feather","grass","haze","mountain","night","pond","darkness","snowflake","silence","sound","sky","shape","surf","thunder","violet","water","wildflower","wave","water","resonance","sun","wood","dream","cherry","tree","fog","frost","voice","paper","frog","smoke","star"];
+  return adjs[Math.floor(Math.random()*adjs.length)] + "_" + nouns[Math.floor(Math.random()*nouns.length)];
+}
+function getRandomColor() {
+  let c = Math.floor(Math.random()*0xFFFFFF).toString(16);
+  while (c.length < 6) c = '0' + c;
+  return '#' + c;
+}
 
-    headerEl.appendChild(authorEl);
-    headerEl.appendChild(timestampEl);
-    contentEl.appendChild(headerEl);
-    contentEl.appendChild(textEl);
+// ========== UI ==========
+function updateConnectionStatus(status) {
+  DOM.connectionStatus.textContent = status;
+  DOM.connectionStatus.className = `connection-status ${status === 'Connected' ? 'connected' : 'disconnected'}`;
+  DOM.sendButton.disabled = status !== 'Connected';
+  DOM.userStatus.textContent = status === 'Connected' ? 'Online' : 'Offline';
+}
 
-    messageEl.appendChild(avatarEl);
-    messageEl.appendChild(contentEl);
-    return messageEl;
+// clear button (per-room)
+const clearBtn = document.createElement('button');
+clearBtn.textContent = '🗑️ Clear Chat';
+clearBtn.style.background = 'none';
+clearBtn.style.border = 'none';
+clearBtn.style.color = '#ED4245';
+clearBtn.style.fontWeight = '600';
+clearBtn.style.cursor = 'pointer';
+clearBtn.style.fontSize = '14px';
+clearBtn.addEventListener('click', () => {
+  if (!confirm(`Clear saved chat for "${currentRoomName}"?`)) return;
+  localStorage.removeItem(getRoomStorageKey(currentRoomName));
+  DOM.messages.innerHTML = '';
+});
+DOM.chatHeader.querySelector('.chat-header-right').appendChild(clearBtn);
+
+// ========== Message DOM helpers ==========
+function createMessageElement(text, authorName, color, isoTime) {
+  const messageEl = document.createElement('div');
+  messageEl.className = 'message';
+
+  const avatarEl = document.createElement('div');
+  avatarEl.className = 'message-avatar';
+  avatarEl.style.backgroundColor = color || '#5865F2';
+  avatarEl.textContent = (authorName && authorName.charAt(0).toUpperCase()) || '?';
+
+  const contentEl = document.createElement('div');
+  contentEl.className = 'message-content';
+
+  const headerEl = document.createElement('div');
+  headerEl.className = 'message-header';
+
+  const authorEl = document.createElement('span');
+  authorEl.className = 'message-author';
+  authorEl.style.color = color || '#DCDDDE';
+  authorEl.textContent = authorName || 'Unknown';
+  if (authorName === 'Owner/Jericho') authorEl.textContent += ' 👑';
+
+  const timestampEl = document.createElement('span');
+  timestampEl.className = 'message-timestamp';
+  let timeText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isoTime) {
+    try { timeText = new Date(isoTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch(e){}
   }
+  timestampEl.textContent = timeText;
 
-  function addMessageToListDOM(text, authorName, color, isoTime) {
-    const wasAtBottom = DOM.messages.scrollTop >= (DOM.messages.scrollHeight - DOM.messages.clientHeight - 20);
-    DOM.messages.appendChild(createMessageElement(text, authorName, color, isoTime));
-    if (wasAtBottom) {
-      DOM.messages.scrollTop = DOM.messages.scrollHeight - DOM.messages.clientHeight;
-    }
+  const textEl = document.createElement('div');
+  textEl.className = 'message-text';
+  textEl.textContent = text;
+
+  headerEl.appendChild(authorEl);
+  headerEl.appendChild(timestampEl);
+  contentEl.appendChild(headerEl);
+  contentEl.appendChild(textEl);
+
+  messageEl.appendChild(avatarEl);
+  messageEl.appendChild(contentEl);
+  return messageEl;
+}
+
+function addMessageToListDOM(text, authorName, color, isoTime) {
+  const wasAtBottom = DOM.messages.scrollTop >= (DOM.messages.scrollHeight - DOM.messages.clientHeight - 20);
+  DOM.messages.appendChild(createMessageElement(text, authorName, color, isoTime));
+  if (wasAtBottom) {
+    DOM.messages.scrollTop = DOM.messages.scrollHeight - DOM.messages.clientHeight;
   }
+}
 
-  // ========== Local storage helpers (per-room) ==========
-  function saveMessageToLocal(text, name, color, roomName, isoTime) {
-    try {
-      const key = getRoomStorageKey(roomName);
-      const history = JSON.parse(localStorage.getItem(key) || '[]');
-      history.push({ text, name, color, time: isoTime || new Date().toISOString() });
-      localStorage.setItem(key, JSON.stringify(history));
-    } catch (e) {
-      console.error('Failed saving message locally', e);
-    }
-  }
-
-  function loadChatHistoryForRoom(roomName) {
-    DOM.messages.innerHTML = '';
+// ========== Local storage helpers (per-room) ==========
+function saveMessageToLocal(text, name, color, roomName, isoTime) {
+  try {
     const key = getRoomStorageKey(roomName);
     const history = JSON.parse(localStorage.getItem(key) || '[]');
-    history.forEach(item => {
-      addMessageToListDOM(item.text, item.name, item.color, item.time);
-    });
+    history.push({ text, name, color, time: isoTime || new Date().toISOString() });
+    localStorage.setItem(key, JSON.stringify(history));
+  } catch (e) {
+    console.error('Failed saving message locally', e);
   }
+}
 
-  // ========== Scaledrone handling - connect once, subscribe/unsubscribe rooms ==========
-  function initializeScaledroneAndJoin() {
-    // create currentUser
-    const ownerMode = isOwnerUnlocked();
-    currentUser = ownerMode
-      ? { name: 'Owner/Jericho', color: '#f04747' }
-      : { name: getRandomName(), color: getRandomColor() };
+function loadChatHistoryForRoom(roomName) {
+  DOM.messages.innerHTML = '';
+  const key = getRoomStorageKey(roomName);
+  const history = JSON.parse(localStorage.getItem(key) || '[]');
+  history.forEach(item => {
+    addMessageToListDOM(item.text, item.name, item.color, item.time);
+  });
+}
 
-    // update header user
-    DOM.userName.textContent = currentUser.name;
-    DOM.userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
-    DOM.userAvatar.style.backgroundColor = currentUser.color;
+// ========== Scaledrone handling ==========
+function initializeScaledroneAndJoin() {
+  const ownerMode = isOwnerUnlocked();
+  currentUser = ownerMode
+    ? { name: 'Owner/Jericho', color: '#f04747' }
+    : { name: getRandomName(), color: getRandomColor() };
 
-    // connect drone once
-    drone = new ScaleDrone(CLIENT_ID, { data: currentUser });
+  DOM.userName.textContent = currentUser.name;
+  DOM.userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
+  DOM.userAvatar.style.backgroundColor = currentUser.color;
 
-    drone.on('open', err => {
-      if (err) {
-        console.error(err);
-        updateConnectionStatus('Error');
-        return;
-      }
-      updateConnectionStatus('Connected');
-      // join the initial room
-      joinRoom(currentRoomName);
-    });
+  // connect once
+  drone = new ScaleDrone(CLIENT_ID, { data: currentUser });
 
-    drone.on('close', () => updateConnectionStatus('Disconnected'));
-    drone.on('error', () => updateConnectionStatus('Error'));
-  }
-
-  function joinRoom(roomName) {
-    // unsubscribe previous room safely
-    try {
-      if (currentRoom && typeof currentRoom.unsubscribe === 'function') {
-        currentRoom.unsubscribe();
-      }
-    } catch (e) { console.warn('unsubscribe error', e); }
-
-    // update UI channel name
-    DOM.channelName.textContent = roomName;
-
-    // load local history for that room
-    loadChatHistoryForRoom(roomName);
-
-    // reset members list for this room
-    members = [];
-    updateMembersDOM();
-
-    // subscribe to new observable room
-    currentRoom = drone.subscribe(`observable-${roomName}`);
-
-    currentRoom.on('open', err => {
-      if (err) {
-        console.error('Room open error', err);
-      }
-    });
-
-    currentRoom.on('members', m => {
-      members = m;
-      updateMembersDOM();
-    });
-
-    currentRoom.on('member_join', member => {
-      members.push(member);
-      updateMembersDOM();
-    });
-
-    currentRoom.on('member_leave', ({ id }) => {
-      const i = members.findIndex(x => x.id === id);
-      if (i !== -1) members.splice(i, 1);
-      updateMembersDOM();
-    });
-
-    currentRoom.on('data', (message, member) => {
-      // message is usually a string in our setup
-      if (!member) return;
-      const name = member.clientData && member.clientData.name ? member.clientData.name : 'Someone';
-      const color = member.clientData && member.clientData.color ? member.clientData.color : '#5865F2';
-      // append to DOM and save
-      addMessageToListDOM(String(message), name, color, new Date().toISOString());
-      saveMessageToLocal(String(message), name, color, roomName, new Date().toISOString());
-    });
-  }
-
-  // ========== Sending messages ==========
-  function sendMessage() {
-    const value = DOM.input.value.trim();
-    if (!value || !drone || !currentRoom) return;
-    DOM.input.value = '';
-    // publish to current room
-    drone.publish({ room: `observable-${currentRoomName}`, message: value });
-    // also locally append + save immediately for nicer UX (Scaledrone will also broadcast back)
-    addMessageToListDOM(value, currentUser.name, currentUser.color, new Date().toISOString());
-    saveMessageToLocal(value, currentUser.name, currentUser.color, currentRoomName, new Date().toISOString());
-  }
-
-  // ========== Members DOM ==========
-  function createMemberSidebarElement(member) {
-    const name = member.clientData && member.clientData.name ? member.clientData.name : 'Unknown';
-    const color = member.clientData && member.clientData.color ? member.clientData.color : '#5865F2';
-
-    const memberEl = document.createElement('div');
-    memberEl.className = 'member-item';
-
-    const avatarEl = document.createElement('div');
-    avatarEl.className = 'member-avatar';
-    avatarEl.style.backgroundColor = color;
-    avatarEl.textContent = name.charAt(0).toUpperCase();
-
-    const infoEl = document.createElement('div');
-    infoEl.className = 'member-info';
-
-    const nameEl = document.createElement('div');
-    nameEl.className = 'member-name';
-    nameEl.textContent = name;
-    if (name === 'Owner/Jericho') {
-      const crown = document.createElement('span');
-      crown.textContent = ' 👑';
-      crown.style.marginLeft = '6px';
-      nameEl.appendChild(crown);
+  drone.on('open', err => {
+    if (err) {
+      console.error(err);
+      updateConnectionStatus('Error');
+      return;
     }
-
-    const statusEl = document.createElement('div');
-    statusEl.className = 'member-status';
-    statusEl.textContent = 'Online';
-
-    infoEl.appendChild(nameEl);
-    infoEl.appendChild(statusEl);
-    memberEl.appendChild(avatarEl);
-    memberEl.appendChild(infoEl);
-    return memberEl;
-  }
-
-  function updateMembersDOM() {
-    DOM.membersList.innerHTML = '';
-    DOM.membersListSidebar.innerHTML = '';
-    members.forEach(m => {
-      try {
-        DOM.membersListSidebar.appendChild(createMemberSidebarElement(m));
-        const el = document.createElement('div');
-        el.className = 'member';
-        el.textContent = (m.clientData && m.clientData.name) || 'Unknown';
-        DOM.membersList.appendChild(el);
-      } catch (e) { /* ignore */ }
-    });
-    const count = members.length;
-    DOM.membersCount.textContent = `${count} users in room:`;
-    DOM.membersCountHeader.textContent = `${count} member${count !== 1 ? 's' : ''}`;
-    DOM.membersCountSidebar.textContent = count;
-    DOM.onlineCount.textContent = count;
-  }
-
-  // ========== Channel switching UI (wire up .channel-item) ==========
-  function wireChannelItems() {
-    const items = document.querySelectorAll('.channel-item');
-    items.forEach(it => {
-      it.addEventListener('click', () => {
-        if (it.classList.contains('active')) return;
-        // active styles
-        items.forEach(x => x.classList.remove('active'));
-        it.classList.add('active');
-        // set new room name (text inside element)
-        const name = it.textContent.trim();
-        currentRoomName = name;
-        // join new room (keeps same Scaledrone connection)
-        joinRoom(currentRoomName);
-      });
-    });
-  }
-
-  // ========== Event listeners ==========
-  DOM.form.addEventListener('submit', e => { e.preventDefault(); sendMessage(); });
-  DOM.input.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
-
-  // ========== init on load ==========
-  window.addEventListener('load', () => {
-    wireChannelItems();
-    initializeScaledroneAndJoin();
-    // load local history for default room immediately (will be replaced by joinRoom after connect, but show something quickly)
-    loadChatHistoryForRoom(currentRoomName);
+    updateConnectionStatus('Connected');
+    joinRoom(currentRoomName);
   });
 
-  </script>
-</body>
-</html>
+  drone.on('close', () => updateConnectionStatus('Disconnected'));
+  drone.on('error', () => updateConnectionStatus('Error'));
+}
+
+function joinRoom(roomName) {
+  // unsubscribe previous
+  try {
+    if (currentRoom && typeof currentRoom.unsubscribe === 'function') {
+      currentRoom.unsubscribe();
+    }
+  } catch (e) { console.warn('unsubscribe error', e); }
+
+  DOM.channelName.textContent = roomName;
+  loadChatHistoryForRoom(roomName);
+  members = [];
+  updateMembersDOM();
+
+  currentRoom = drone.subscribe(`observable-${roomName}`);
+
+  currentRoom.on('open', err => {
+    if (err) console.error('Room open error', err);
+  });
+
+  currentRoom.on('members', m => {
+    members = m;
+    updateMembersDOM();
+  });
+
+  currentRoom.on('member_join', member => {
+    members.push(member);
+    updateMembersDOM();
+  });
+
+  currentRoom.on('member_leave', ({ id }) => {
+    const i = members.findIndex(x => x.id === id);
+    if (i !== -1) members.splice(i, 1);
+    updateMembersDOM();
+  });
+
+  // single data handler: append & save (this prevents double-appending)
+  currentRoom.on('data', (message, member) => {
+    if (!member) return;
+    const name = member.clientData && member.clientData.name ? member.clientData.name : 'Someone';
+    const color = member.clientData && member.clientData.color ? member.clientData.color : '#5865F2';
+    const text = String(message);
+    const timeIso = new Date().toISOString();
+    addMessageToListDOM(text, name, color, timeIso);
+    saveMessageToLocal(text, name, color, roomName, timeIso);
+  });
+}
+
+// ========== Sending messages (FIXED) ==========
+function sendMessage() {
+  const value = DOM.input.value.trim();
+  if (!value || !drone || !currentRoom) return;
+  DOM.input.value = '';
+  // publish only — DO NOT append/save here (room.on('data') will handle it once)
+  drone.publish({ room: `observable-${currentRoomName}`, message: value });
+}
+
+// ========== Members DOM ==========
+function createMemberSidebarElement(member) {
+  const name = member.clientData && member.clientData.name ? member.clientData.name : 'Unknown';
+  const color = member.clientData && member.clientData.color ? member.clientData.color : '#5865F2';
+
+  const memberEl = document.createElement('div');
+  memberEl.className = 'member-item';
+
+  const avatarEl = document.createElement('div');
+  avatarEl.className = 'member-avatar';
+  avatarEl.style.backgroundColor = color;
+  avatarEl.textContent = name.charAt(0).toUpperCase();
+
+  const infoEl = document.createElement('div');
+  infoEl.className = 'member-info';
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'member-name';
+  nameEl.textContent = name;
+  if (name === 'Owner/Jericho') {
+    const crown = document.createElement('span');
+    crown.textContent = ' 👑';
+    crown.style.marginLeft = '6px';
+    nameEl.appendChild(crown);
+  }
+
+  const statusEl = document.createElement('div');
+  statusEl.className = 'member-status';
+  statusEl.textContent = 'Online';
+
+  infoEl.appendChild(nameEl);
+  infoEl.appendChild(statusEl);
+  memberEl.appendChild(avatarEl);
+  memberEl.appendChild(infoEl);
+  return memberEl;
+}
+
+function updateMembersDOM() {
+  DOM.membersList.innerHTML = '';
+  DOM.membersListSidebar.innerHTML = '';
+  members.forEach(m => {
+    try {
+      DOM.membersListSidebar.appendChild(createMemberSidebarElement(m));
+      const el = document.createElement('div');
+      el.className = 'member';
+      el.textContent = (m.clientData && m.clientData.name) || 'Unknown';
+      DOM.membersList.appendChild(el);
+    } catch (e) { /* ignore */ }
+  });
+  const count = members.length;
+  DOM.membersCount.textContent = `${count} users in room:`;
+  DOM.membersCountHeader.textContent = `${count} member${count !== 1 ? 's' : ''}`;
+  DOM.membersCountSidebar.textContent = count;
+  DOM.onlineCount.textContent = count;
+}
+
+// ========== Channel switching UI ==========
+function wireChannelItems() {
+  const items = document.querySelectorAll('.channel-item');
+  items.forEach(it => {
+    it.addEventListener('click', () => {
+      if (it.classList.contains('active')) return;
+      items.forEach(x => x.classList.remove('active'));
+      it.classList.add('active');
+      const name = it.textContent.trim();
+      currentRoomName = name;
+      joinRoom(currentRoomName);
+    });
+  });
+}
+
+// ========== Event listeners (attach once) ==========
+DOM.form.addEventListener('submit', e => { e.preventDefault(); sendMessage(); });
+DOM.input.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+
+// ========== Init ==========
+window.addEventListener('load', () => {
+  wireChannelItems();
+  initializeScaledroneAndJoin();
+  loadChatHistoryForRoom(currentRoomName);
+});
+</script>
