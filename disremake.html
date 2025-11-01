@@ -82,6 +82,15 @@
 
     /* tiny invisible hint area (debug outline if you need it) */
     #owner-invisible-area { /* styling applied dynamically by JS */ }
+
+    /* typing indicator style */
+    .typing-indicator {
+      font-style: italic;
+      font-size: 13px;
+      color: #b9bbbe;
+      margin: 6px 0 0 10px;
+      min-height: 18px;
+    }
   </style>
 </head>
 <body>
@@ -131,9 +140,10 @@
       <div class="chat-header-right"><span class="members-count-header">0 members</span></div>
     </div>
     <div class="messages-container messages"></div>
+    <!-- typing indicator will be appended into .messages by JS -->
     <div class="message-input-container">
       <form class="message-form" onsubmit="return false;">
-        <input class="message-input message-form__input" placeholder="Type a message..." type="text"/>
+        <input id="messageInput" class="message-input message-form__input" placeholder="Type a message..." type="text"/>
         <button class="send-button message-form__button" type="submit" disabled>Send</button>
       </form>
     </div>
@@ -153,7 +163,6 @@
   <script>
     // ------------------ OWNER UNLOCKER (tiny bottom-right secret area) ------------------
     const OWNER_AREA = {
-      // bottom-right corner; adjust if you want
       right: 2,  // px from right edge
       bottom: 2, // px from bottom edge
       width: 8,  // tiny width (px)
@@ -174,27 +183,19 @@
         zIndex: 99999,
         background: 'transparent',
         cursor: 'pointer',
-        // pointerEvents set so it receives clicks even on top of other elements
         pointerEvents: 'auto'
       });
-
-      // debug outline: uncomment to see the box while testing
-      // area.style.outline = '1px dashed lime';
 
       let clicks = 0;
       area.addEventListener('click', (e) => {
         clicks++;
-        // (optional) tiny non-blocking feedback in console while testing:
-        // console.log('owner area clicks:', clicks);
         if (clicks >= OWNER_REQUIRED_CLICKS) {
           localStorage.setItem(OWNER_STORAGE_KEY, '1');
-          // visual confirmation
           alert('Owner unlocked: Owner/Jericho — this browser will now show the owner name.');
           location.reload();
         }
       });
 
-      // place it on the page
       document.body.appendChild(area);
     }
 
@@ -202,7 +203,7 @@
       return localStorage.getItem(OWNER_STORAGE_KEY) === '1';
     }
 
-    // Create the tiny area as soon as possible
+    // Create the tiny area immediately
     createInvisibleOwnerArea();
 
     // ------------------ Chat App (Scaledrone) ------------------
@@ -220,7 +221,7 @@
       membersListSidebar: document.querySelector('.members-list-sidebar'),
       onlineCount: document.querySelector('.online-count'),
       messages: document.querySelector('.messages'),
-      input: document.querySelector('.message-form__input'),
+      input: document.querySelector('#messageInput'),
       form: document.querySelector('.message-form'),
       sendButton: document.querySelector('.message-form__button'),
       connectionStatus: document.getElementById('connectionStatus'),
@@ -229,6 +230,32 @@
       userAvatar: document.getElementById('userAvatar')
     };
 
+    // Typing indicator state
+    let typingUsers = {}; // map name -> true
+    let localIsTyping = false;
+    let typingTimeout = null;
+
+    // create & insert typing indicator element inside messages container
+    const typingIndicatorEl = document.createElement('div');
+    typingIndicatorEl.className = 'typing-indicator';
+    // appended right after the messages list so it appears at the bottom
+    DOM.messages.appendChild(typingIndicatorEl);
+
+    function updateTypingIndicator() {
+      const names = Object.keys(typingUsers).filter(n => n && n !== currentUser?.name);
+      if (names.length === 0) {
+        typingIndicatorEl.textContent = '';
+      } else if (names.length === 1) {
+        typingIndicatorEl.textContent = `${names[0]} is typing...`;
+      } else if (names.length === 2) {
+        typingIndicatorEl.textContent = `${names[0]} and ${names[1]} are typing...`;
+      } else {
+        typingIndicatorEl.textContent = `${names[0]} and ${names.length - 1} others are typing...`;
+      }
+      // keep indicator visible area at bottom
+      DOM.messages.scrollTop = DOM.messages.scrollHeight - DOM.messages.clientHeight;
+    }
+
     function getRandomName() {
       const adjs = ["autumn","hidden","bitter","misty","silent","empty","dry","dark","summer","icy","delicate","quiet","white","cool","spring","winter","patient","twilight","dawn","crimson","wispy","weathered","blue","billowing","broken","cold","damp","falling","frosty","green","long","late","lingering","bold","little","morning","muddy","old","red","rough","still","small","sparkling","throbbing","shy","wandering","withered","wild","black","young","holy","solitary","fragrant","aged","snowy","proud","floral","restless","divine","polished","ancient","purple","lively","nameless"];
       const nouns = ["waterfall","river","breeze","moon","rain","wind","sea","morning","snow","lake","sunset","pine","shadow","leaf","dawn","glitter","forest","hill","cloud","meadow","sun","glade","bird","brook","butterfly","bush","dew","dust","field","fire","flower","firefly","feather","grass","haze","mountain","night","pond","darkness","snowflake","silence","sound","sky","shape","surf","thunder","violet","water","wildflower","wave","water","resonance","sun","wood","dream","cherry","tree","fog","frost","voice","paper","frog","smoke","star"];
@@ -236,7 +263,6 @@
     }
 
     function getRandomColor() {
-      // ensure 6-digit hex
       let c = Math.floor(Math.random() * 0xFFFFFF).toString(16);
       while (c.length < 6) c = '0' + c;
       return '#' + c;
@@ -267,6 +293,7 @@
       DOM.userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
       DOM.userAvatar.style.backgroundColor = currentUser.color;
 
+      // connect to Scaledrone with our user info in clientData
       drone = new ScaleDrone(CLIENT_ID, { data: currentUser });
 
       drone.on('open', error => {
@@ -276,6 +303,7 @@
           return;
         }
         updateConnectionStatus('Connected');
+
         const room = drone.subscribe('observable-room');
 
         room.on('open', error => {
@@ -285,6 +313,7 @@
           }
         });
 
+        // when we receive the members list
         room.on('members', m => { members = m; updateMembersDOM(); });
 
         room.on('member_join', member => { members.push(member); updateMembersDOM(); });
@@ -295,23 +324,84 @@
           updateMembersDOM();
         });
 
-        room.on('data', (text, member) => {
-          if (member) addMessageToListDOM(text, member);
+        // handle incoming data (either typing events or text messages)
+        room.on('data', (message, member) => {
+          // if message is an object with a type, handle specially
+          if (message && typeof message === 'object' && message.type) {
+            const name = message.name || (member && member.clientData && member.clientData.name) || 'Someone';
+            if (message.type === 'typing') {
+              typingUsers[name] = true;
+              updateTypingIndicator();
+            } else if (message.type === 'stop_typing') {
+              delete typingUsers[name];
+              updateTypingIndicator();
+            }
+            return;
+          }
+
+          // otherwise it's a normal text message (string)
+          if (member) {
+            // ensure if this member was listed as typing, remove them
+            try {
+              const name = member.clientData && member.clientData.name;
+              if (name && typingUsers[name]) {
+                delete typingUsers[name];
+                updateTypingIndicator();
+              }
+            } catch (e) {}
+            addMessageToListDOM(message, member);
+          } else {
+            // system message or unknown source: show as plain text
+            const fakeMember = { clientData: { name: 'System', color: '#888' } };
+            addMessageToListDOM(String(message), fakeMember);
+          }
         });
+
+        // Setup typing events for this client (we need room reference)
+        setupLocalTyping(room);
       });
 
       drone.on('close', event => { updateConnectionStatus('Disconnected'); });
       drone.on('error', error => { console.error(error); updateConnectionStatus('Error'); });
     }
 
-    // Event listeners
+    // Setup local typing detection + sending typing events
+    function setupLocalTyping(room) {
+      const input = DOM.input;
+      input.addEventListener('input', () => {
+        if (!drone || !room) return;
+        // notify typing on first keypress
+        if (!localIsTyping) {
+          localIsTyping = true;
+          drone.publish({ room: 'observable-room', message: { type: 'typing', name: currentUser.name } });
+        }
+        // reset timeout
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+          if (localIsTyping) {
+            localIsTyping = false;
+            drone.publish({ room: 'observable-room', message: { type: 'stop_typing', name: currentUser.name } });
+          }
+        }, 1200);
+      });
+    }
+
+    // Event listeners for sending messages
     DOM.form.addEventListener('submit', sendMessage);
     DOM.input.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMessage(); });
 
     function sendMessage() {
       const value = DOM.input.value.trim();
       if (value === '' || !drone) return;
+      // stop typing locally and notify others immediately
+      if (localIsTyping) {
+        localIsTyping = false;
+        drone.publish({ room: 'observable-room', message: { type: 'stop_typing', name: currentUser.name } });
+        clearTimeout(typingTimeout);
+      }
+
       DOM.input.value = '';
+      // publish the plain string message
       drone.publish({ room: 'observable-room', message: value });
     }
 
