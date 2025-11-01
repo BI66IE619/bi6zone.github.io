@@ -161,362 +161,259 @@
   </div>
 
   <script>
-    // ------------------ OWNER UNLOCKER (tiny bottom-right secret area) ------------------
-    const OWNER_AREA = {
-      right: 2,  // px from right edge
-      bottom: 2, // px from bottom edge
-      width: 8,  // tiny width (px)
-      height: 8  // tiny height (px)
-    };
-    const OWNER_REQUIRED_CLICKS = 20;
-    const OWNER_STORAGE_KEY = 'jerichoOwnerUnlocked';
+  // ------------------ OWNER UNLOCKER (tiny bottom-right secret area) ------------------
+  const OWNER_AREA = { right: 2, bottom: 2, width: 8, height: 8 };
+  const OWNER_REQUIRED_CLICKS = 20;
+  const OWNER_STORAGE_KEY = 'jerichoOwnerUnlocked';
+  const CHAT_STORAGE_KEY = 'unblockedcord_chat_history';
 
-    function createInvisibleOwnerArea() {
-      const area = document.createElement('div');
-      area.id = 'owner-invisible-area';
-      Object.assign(area.style, {
-        position: 'fixed',
-        right: OWNER_AREA.right + 'px',
-        bottom: OWNER_AREA.bottom + 'px',
-        width: OWNER_AREA.width + 'px',
-        height: OWNER_AREA.height + 'px',
-        zIndex: 99999,
-        background: 'transparent',
-        cursor: 'pointer',
-        pointerEvents: 'auto'
+  function createInvisibleOwnerArea() {
+    const area = document.createElement('div');
+    area.id = 'owner-invisible-area';
+    Object.assign(area.style, {
+      position: 'fixed',
+      right: OWNER_AREA.right + 'px',
+      bottom: OWNER_AREA.bottom + 'px',
+      width: OWNER_AREA.width + 'px',
+      height: OWNER_AREA.height + 'px',
+      zIndex: 99999,
+      background: 'transparent',
+      cursor: 'pointer',
+      pointerEvents: 'auto'
+    });
+    let clicks = 0;
+    area.addEventListener('click', () => {
+      clicks++;
+      if (clicks >= OWNER_REQUIRED_CLICKS) {
+        localStorage.setItem(OWNER_STORAGE_KEY, '1');
+        alert('Owner unlocked: Owner/Jericho — this browser will now show the owner name.');
+        location.reload();
+      }
+    });
+    document.body.appendChild(area);
+  }
+
+  function isOwnerUnlocked() {
+    return localStorage.getItem(OWNER_STORAGE_KEY) === '1';
+  }
+
+  createInvisibleOwnerArea();
+
+  // ------------------ Chat App (Scaledrone) ------------------
+  const CLIENT_ID = 'hWmT5ZuGe51IgiMD';
+  let drone;
+  let members = [];
+  let currentUser = null;
+
+  // DOM elements
+  const DOM = {
+    membersCount: document.querySelector('.members-count'),
+    membersList: document.querySelector('.members-list'),
+    membersCountHeader: document.querySelector('.members-count-header'),
+    membersCountSidebar: document.querySelector('.members-count-sidebar'),
+    membersListSidebar: document.querySelector('.members-list-sidebar'),
+    onlineCount: document.querySelector('.online-count'),
+    messages: document.querySelector('.messages'),
+    input: document.querySelector('.message-form__input'),
+    form: document.querySelector('.message-form'),
+    sendButton: document.querySelector('.message-form__button'),
+    connectionStatus: document.getElementById('connectionStatus'),
+    userName: document.getElementById('userName'),
+    userStatus: document.getElementById('userStatus'),
+    userAvatar: document.getElementById('userAvatar'),
+    chatHeader: document.querySelector('.chat-header')
+  };
+
+  // --- add Clear Chat button ---
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = '🗑️ Clear Chat';
+  clearBtn.style.background = 'none';
+  clearBtn.style.border = 'none';
+  clearBtn.style.color = '#ED4245';
+  clearBtn.style.fontWeight = '600';
+  clearBtn.style.cursor = 'pointer';
+  clearBtn.style.fontSize = '14px';
+  clearBtn.addEventListener('click', clearChatHistory);
+  DOM.chatHeader.appendChild(clearBtn);
+
+  function getRandomName() {
+    const adjs = ["autumn","hidden","bitter","misty","silent","empty","dry","dark","summer","icy","delicate","quiet","white","cool","spring","winter","patient","twilight","dawn","crimson","wispy","weathered","blue","billowing","broken","cold","damp","falling","frosty","green","long","late","lingering","bold","little","morning","muddy","old","red","rough","still","small","sparkling","throbbing","shy","wandering","withered","wild","black","young","holy","solitary","fragrant","aged","snowy","proud","floral","restless","divine","polished","ancient","purple","lively","nameless"];
+    const nouns = ["waterfall","river","breeze","moon","rain","wind","sea","morning","snow","lake","sunset","pine","shadow","leaf","dawn","glitter","forest","hill","cloud","meadow","sun","glade","bird","brook","butterfly","bush","dew","dust","field","fire","flower","firefly","feather","grass","haze","mountain","night","pond","darkness","snowflake","silence","sound","sky","shape","surf","thunder","violet","water","wildflower","wave","water","resonance","sun","wood","dream","cherry","tree","fog","frost","voice","paper","frog","smoke","star"];
+    return adjs[Math.floor(Math.random()*adjs.length)] + "_" + nouns[Math.floor(Math.random()*nouns.length)];
+  }
+
+  function getRandomColor() {
+    let c = Math.floor(Math.random() * 0xFFFFFF).toString(16);
+    while (c.length < 6) c = '0' + c;
+    return '#' + c;
+  }
+
+  function updateConnectionStatus(status) {
+    DOM.connectionStatus.textContent = status;
+    DOM.connectionStatus.className = `connection-status ${status === 'Connected' ? 'connected' : 'disconnected'}`;
+    if (status === 'Connected') {
+      DOM.sendButton.disabled = false;
+      DOM.userStatus.textContent = 'Online';
+    } else {
+      DOM.sendButton.disabled = true;
+      DOM.userStatus.textContent = 'Offline';
+    }
+  }
+
+  function initializeChat() {
+    const ownerMode = isOwnerUnlocked();
+    currentUser = ownerMode
+      ? { name: "Owner/Jericho", color: "#f04747" }
+      : { name: getRandomName(), color: getRandomColor() };
+
+    DOM.userName.textContent = currentUser.name;
+    DOM.userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
+    DOM.userAvatar.style.backgroundColor = currentUser.color;
+
+    // Load saved messages
+    loadChatHistory();
+
+    drone = new ScaleDrone(CLIENT_ID, { data: currentUser });
+
+    drone.on('open', error => {
+      if (error) {
+        console.error(error);
+        updateConnectionStatus('Error');
+        return;
+      }
+      updateConnectionStatus('Connected');
+      const room = drone.subscribe('observable-room');
+
+      room.on('members', m => { members = m; updateMembersDOM(); });
+      room.on('member_join', member => { members.push(member); updateMembersDOM(); });
+      room.on('member_leave', ({id}) => {
+        const index = members.findIndex(member => member.id === id);
+        if (index !== -1) members.splice(index, 1);
+        updateMembersDOM();
       });
-
-      let clicks = 0;
-      area.addEventListener('click', (e) => {
-        clicks++;
-        if (clicks >= OWNER_REQUIRED_CLICKS) {
-          localStorage.setItem(OWNER_STORAGE_KEY, '1');
-          alert('Owner unlocked: Owner/Jericho — this browser will now show the owner name.');
-          location.reload();
+      room.on('data', (text, member) => {
+        if (member) {
+          addMessageToListDOM(text, member);
+          saveMessageToLocal(text, member);
         }
       });
+    });
 
-      document.body.appendChild(area);
+    drone.on('close', () => updateConnectionStatus('Disconnected'));
+    drone.on('error', () => updateConnectionStatus('Error'));
+  }
+
+  DOM.form.addEventListener('submit', sendMessage);
+  DOM.input.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+
+  function sendMessage() {
+    const value = DOM.input.value.trim();
+    if (value === '' || !drone) return;
+    DOM.input.value = '';
+    drone.publish({ room: 'observable-room', message: value });
+  }
+
+  function createMemberSidebarElement(member) {
+    const { name, color } = member.clientData;
+    const memberEl = document.createElement('div');
+    memberEl.className = 'member-item';
+    const avatarEl = document.createElement('div');
+    avatarEl.className = 'member-avatar';
+    avatarEl.style.backgroundColor = color;
+    avatarEl.textContent = name.charAt(0).toUpperCase();
+    const infoEl = document.createElement('div');
+    infoEl.className = 'member-info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'member-name';
+    nameEl.textContent = name;
+    if (name === 'Owner/Jericho') {
+      const crown = document.createElement('span');
+      crown.textContent = ' 👑';
+      crown.style.marginLeft = '6px';
+      nameEl.appendChild(crown);
     }
+    const statusEl = document.createElement('div');
+    statusEl.className = 'member-status';
+    statusEl.textContent = 'Online';
+    infoEl.appendChild(nameEl);
+    infoEl.appendChild(statusEl);
+    memberEl.appendChild(avatarEl);
+    memberEl.appendChild(infoEl);
+    return memberEl;
+  }
 
-    function isOwnerUnlocked() {
-      return localStorage.getItem(OWNER_STORAGE_KEY) === '1';
+  function updateMembersDOM() {
+    const count = members.length;
+    DOM.membersCount.innerText = `${count} users in room:`;
+    DOM.membersList.innerHTML = '';
+    DOM.membersListSidebar.innerHTML = '';
+    members.forEach(member => {
+      DOM.membersListSidebar.appendChild(createMemberSidebarElement(member));
+    });
+    DOM.membersCountHeader.textContent = `${count} member${count !== 1 ? 's' : ''}`;
+    DOM.membersCountSidebar.textContent = count;
+    DOM.onlineCount.textContent = count;
+  }
+
+  function createMessageElement(text, member) {
+    const { name, color } = member.clientData;
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message';
+    const avatarEl = document.createElement('div');
+    avatarEl.className = 'message-avatar';
+    avatarEl.style.backgroundColor = color;
+    avatarEl.textContent = name.charAt(0).toUpperCase();
+    const contentEl = document.createElement('div');
+    contentEl.className = 'message-content';
+    const headerEl = document.createElement('div');
+    headerEl.className = 'message-header';
+    const authorEl = document.createElement('span');
+    authorEl.className = 'message-author';
+    authorEl.style.color = color;
+    authorEl.textContent = name;
+    if (name === 'Owner/Jericho') authorEl.textContent += ' 👑';
+    const timestampEl = document.createElement('span');
+    timestampEl.className = 'message-timestamp';
+    timestampEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const textEl = document.createElement('div');
+    textEl.className = 'message-text';
+    textEl.textContent = text;
+    headerEl.appendChild(authorEl);
+    headerEl.appendChild(timestampEl);
+    contentEl.appendChild(headerEl);
+    contentEl.appendChild(textEl);
+    messageEl.appendChild(avatarEl);
+    messageEl.appendChild(contentEl);
+    return messageEl;
+  }
+
+  function addMessageToListDOM(text, member) {
+    const el = DOM.messages;
+    const wasAtBottom = el.scrollTop === el.scrollHeight - el.clientHeight;
+    el.appendChild(createMessageElement(text, member));
+    if (wasAtBottom) el.scrollTop = el.scrollHeight - el.clientHeight;
+  }
+
+  // -------- Local Storage Chat Saving ----------
+  function saveMessageToLocal(text, member) {
+    const history = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '[]');
+    history.push({ text, member });
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(history));
+  }
+
+  function loadChatHistory() {
+    const history = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '[]');
+    history.forEach(({ text, member }) => {
+      addMessageToListDOM(text, member);
+    });
+  }
+
+  function clearChatHistory() {
+    if (confirm('Clear all local chat history?')) {
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+      DOM.messages.innerHTML = '';
     }
+  }
 
-    // Create the tiny area immediately
-    createInvisibleOwnerArea();
-
-    // ------------------ Chat App (Scaledrone) ------------------
-    const CLIENT_ID = 'hWmT5ZuGe51IgiMD';
-    let drone;
-    let members = [];
-    let currentUser = null;
-
-    // DOM elements
-    const DOM = {
-      membersCount: document.querySelector('.members-count'),
-      membersList: document.querySelector('.members-list'),
-      membersCountHeader: document.querySelector('.members-count-header'),
-      membersCountSidebar: document.querySelector('.members-count-sidebar'),
-      membersListSidebar: document.querySelector('.members-list-sidebar'),
-      onlineCount: document.querySelector('.online-count'),
-      messages: document.querySelector('.messages'),
-      input: document.querySelector('#messageInput'),
-      form: document.querySelector('.message-form'),
-      sendButton: document.querySelector('.message-form__button'),
-      connectionStatus: document.getElementById('connectionStatus'),
-      userName: document.getElementById('userName'),
-      userStatus: document.getElementById('userStatus'),
-      userAvatar: document.getElementById('userAvatar')
-    };
-
-    // Typing indicator state
-    let typingUsers = {}; // map name -> true
-    let localIsTyping = false;
-    let typingTimeout = null;
-
-    // create & insert typing indicator element inside messages container
-    const typingIndicatorEl = document.createElement('div');
-    typingIndicatorEl.className = 'typing-indicator';
-    // appended right after the messages list so it appears at the bottom
-    DOM.messages.appendChild(typingIndicatorEl);
-
-    function updateTypingIndicator() {
-      const names = Object.keys(typingUsers).filter(n => n && n !== currentUser?.name);
-      if (names.length === 0) {
-        typingIndicatorEl.textContent = '';
-      } else if (names.length === 1) {
-        typingIndicatorEl.textContent = `${names[0]} is typing...`;
-      } else if (names.length === 2) {
-        typingIndicatorEl.textContent = `${names[0]} and ${names[1]} are typing...`;
-      } else {
-        typingIndicatorEl.textContent = `${names[0]} and ${names.length - 1} others are typing...`;
-      }
-      // keep indicator visible area at bottom
-      DOM.messages.scrollTop = DOM.messages.scrollHeight - DOM.messages.clientHeight;
-    }
-
-    function getRandomName() {
-      const adjs = ["autumn","hidden","bitter","misty","silent","empty","dry","dark","summer","icy","delicate","quiet","white","cool","spring","winter","patient","twilight","dawn","crimson","wispy","weathered","blue","billowing","broken","cold","damp","falling","frosty","green","long","late","lingering","bold","little","morning","muddy","old","red","rough","still","small","sparkling","throbbing","shy","wandering","withered","wild","black","young","holy","solitary","fragrant","aged","snowy","proud","floral","restless","divine","polished","ancient","purple","lively","nameless"];
-      const nouns = ["waterfall","river","breeze","moon","rain","wind","sea","morning","snow","lake","sunset","pine","shadow","leaf","dawn","glitter","forest","hill","cloud","meadow","sun","glade","bird","brook","butterfly","bush","dew","dust","field","fire","flower","firefly","feather","grass","haze","mountain","night","pond","darkness","snowflake","silence","sound","sky","shape","surf","thunder","violet","water","wildflower","wave","water","resonance","sun","wood","dream","cherry","tree","fog","frost","voice","paper","frog","smoke","star"];
-      return adjs[Math.floor(Math.random()*adjs.length)] + "_" + nouns[Math.floor(Math.random()*nouns.length)];
-    }
-
-    function getRandomColor() {
-      let c = Math.floor(Math.random() * 0xFFFFFF).toString(16);
-      while (c.length < 6) c = '0' + c;
-      return '#' + c;
-    }
-
-    function updateConnectionStatus(status) {
-      DOM.connectionStatus.textContent = status;
-      DOM.connectionStatus.className = `connection-status ${status === 'Connected' ? 'connected' : 'disconnected'}`;
-      if (status === 'Connected') {
-        DOM.sendButton.disabled = false;
-        DOM.userStatus.textContent = 'Online';
-      } else {
-        DOM.sendButton.disabled = true;
-        DOM.userStatus.textContent = 'Offline';
-      }
-    }
-
-    function initializeChat() {
-      // decide owner or normal user (persisted per-browser)
-      const ownerMode = isOwnerUnlocked();
-
-      currentUser = ownerMode
-        ? { name: "Owner/Jericho", color: "#f04747" }
-        : { name: getRandomName(), color: getRandomColor() };
-
-      // Update UI with user info
-      DOM.userName.textContent = currentUser.name;
-      DOM.userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
-      DOM.userAvatar.style.backgroundColor = currentUser.color;
-
-      // connect to Scaledrone with our user info in clientData
-      drone = new ScaleDrone(CLIENT_ID, { data: currentUser });
-
-      drone.on('open', error => {
-        if (error) {
-          console.error(error);
-          updateConnectionStatus('Error');
-          return;
-        }
-        updateConnectionStatus('Connected');
-
-        const room = drone.subscribe('observable-room');
-
-        room.on('open', error => {
-          if (error) {
-            console.error(error);
-            return;
-          }
-        });
-
-        // when we receive the members list
-        room.on('members', m => { members = m; updateMembersDOM(); });
-
-        room.on('member_join', member => { members.push(member); updateMembersDOM(); });
-
-        room.on('member_leave', ({id}) => {
-          const index = members.findIndex(member => member.id === id);
-          if (index !== -1) members.splice(index, 1);
-          updateMembersDOM();
-        });
-
-        // handle incoming data (either typing events or text messages)
-        room.on('data', (message, member) => {
-          // if message is an object with a type, handle specially
-          if (message && typeof message === 'object' && message.type) {
-            const name = message.name || (member && member.clientData && member.clientData.name) || 'Someone';
-            if (message.type === 'typing') {
-              typingUsers[name] = true;
-              updateTypingIndicator();
-            } else if (message.type === 'stop_typing') {
-              delete typingUsers[name];
-              updateTypingIndicator();
-            }
-            return;
-          }
-
-          // otherwise it's a normal text message (string)
-          if (member) {
-            // ensure if this member was listed as typing, remove them
-            try {
-              const name = member.clientData && member.clientData.name;
-              if (name && typingUsers[name]) {
-                delete typingUsers[name];
-                updateTypingIndicator();
-              }
-            } catch (e) {}
-            addMessageToListDOM(message, member);
-          } else {
-            // system message or unknown source: show as plain text
-            const fakeMember = { clientData: { name: 'System', color: '#888' } };
-            addMessageToListDOM(String(message), fakeMember);
-          }
-        });
-
-        // Setup typing events for this client (we need room reference)
-        setupLocalTyping(room);
-      });
-
-      drone.on('close', event => { updateConnectionStatus('Disconnected'); });
-      drone.on('error', error => { console.error(error); updateConnectionStatus('Error'); });
-    }
-
-    // Setup local typing detection + sending typing events
-    function setupLocalTyping(room) {
-      const input = DOM.input;
-      input.addEventListener('input', () => {
-        if (!drone || !room) return;
-        // notify typing on first keypress
-        if (!localIsTyping) {
-          localIsTyping = true;
-          drone.publish({ room: 'observable-room', message: { type: 'typing', name: currentUser.name } });
-        }
-        // reset timeout
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => {
-          if (localIsTyping) {
-            localIsTyping = false;
-            drone.publish({ room: 'observable-room', message: { type: 'stop_typing', name: currentUser.name } });
-          }
-        }, 1200);
-      });
-    }
-
-    // Event listeners for sending messages
-    DOM.form.addEventListener('submit', sendMessage);
-    DOM.input.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMessage(); });
-
-    function sendMessage() {
-      const value = DOM.input.value.trim();
-      if (value === '' || !drone) return;
-      // stop typing locally and notify others immediately
-      if (localIsTyping) {
-        localIsTyping = false;
-        drone.publish({ room: 'observable-room', message: { type: 'stop_typing', name: currentUser.name } });
-        clearTimeout(typingTimeout);
-      }
-
-      DOM.input.value = '';
-      // publish the plain string message
-      drone.publish({ room: 'observable-room', message: value });
-    }
-
-    function createMemberElement(member) {
-      const { name, color } = member.clientData;
-      const el = document.createElement('div');
-      el.appendChild(document.createTextNode(name));
-      el.className = 'member';
-      el.style.color = color;
-      return el;
-    }
-
-    function createMemberSidebarElement(member) {
-      const { name, color } = member.clientData;
-      const memberEl = document.createElement('div');
-      memberEl.className = 'member-item';
-
-      const avatarEl = document.createElement('div');
-      avatarEl.className = 'member-avatar';
-      avatarEl.style.backgroundColor = color;
-      avatarEl.textContent = name.charAt(0).toUpperCase();
-
-      const infoEl = document.createElement('div');
-      infoEl.className = 'member-info';
-
-      const nameEl = document.createElement('div');
-      nameEl.className = 'member-name';
-      nameEl.textContent = name;
-      if (name === 'Owner/Jericho') {
-        const crown = document.createElement('span');
-        crown.textContent = ' 👑';
-        crown.style.marginLeft = '6px';
-        crown.style.fontSize = '14px';
-        nameEl.appendChild(crown);
-      }
-
-      const statusEl = document.createElement('div');
-      statusEl.className = 'member-status';
-      statusEl.textContent = 'Online';
-
-      infoEl.appendChild(nameEl);
-      infoEl.appendChild(statusEl);
-      memberEl.appendChild(avatarEl);
-      memberEl.appendChild(infoEl);
-      return memberEl;
-    }
-
-    function updateMembersDOM() {
-      const memberCount = members.length;
-      DOM.membersCount.innerText = `${memberCount} users in room:`;
-      DOM.membersList.innerHTML = '';
-      members.forEach(member => DOM.membersList.appendChild(createMemberElement(member)));
-
-      DOM.membersCountHeader.textContent = `${memberCount} member${memberCount !== 1 ? 's' : ''}`;
-      DOM.membersCountSidebar.textContent = memberCount;
-      DOM.onlineCount.textContent = memberCount;
-      DOM.membersListSidebar.innerHTML = '';
-      members.forEach(member => DOM.membersListSidebar.appendChild(createMemberSidebarElement(member)));
-    }
-
-    function createMessageElement(text, member) {
-      const { name, color } = member.clientData;
-      const messageEl = document.createElement('div');
-      messageEl.className = 'message';
-
-      const avatarEl = document.createElement('div');
-      avatarEl.className = 'message-avatar';
-      avatarEl.style.backgroundColor = color;
-      avatarEl.textContent = name.charAt(0).toUpperCase();
-
-      const contentEl = document.createElement('div');
-      contentEl.className = 'message-content';
-
-      const headerEl = document.createElement('div');
-      headerEl.className = 'message-header';
-
-      const authorEl = document.createElement('span');
-      authorEl.className = 'message-author';
-      authorEl.style.color = color;
-      authorEl.textContent = name;
-      if (name === 'Owner/Jericho') {
-        const crown = document.createElement('span');
-        crown.textContent = ' 👑';
-        crown.style.marginLeft = '6px';
-        crown.style.fontSize = '14px';
-        authorEl.appendChild(crown);
-      }
-
-      const timestampEl = document.createElement('span');
-      timestampEl.className = 'message-timestamp';
-      timestampEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      const textEl = document.createElement('div');
-      textEl.className = 'message-text';
-      textEl.textContent = text;
-
-      headerEl.appendChild(authorEl);
-      headerEl.appendChild(timestampEl);
-      contentEl.appendChild(headerEl);
-      contentEl.appendChild(textEl);
-      messageEl.appendChild(avatarEl);
-      messageEl.appendChild(contentEl);
-
-      return messageEl;
-    }
-
-    function addMessageToListDOM(text, member) {
-      const el = DOM.messages;
-      const wasAtBottom = el.scrollTop === el.scrollHeight - el.clientHeight;
-      el.appendChild(createMessageElement(text, member));
-      if (wasAtBottom) el.scrollTop = el.scrollHeight - el.clientHeight;
-    }
-
-    // start chat when page loads
-    window.addEventListener('load', initializeChat);
-  </script>
-</body>
-</html>
+  window.addEventListener('load', initializeChat);
+</script>
