@@ -52,10 +52,13 @@ jobs:
           version_number = f"1.{random.randint(1,20)}.{random.randint(0,9)}"
 
           api_key = os.environ["GEMINI_API_KEY"]
-          url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key={api_key}"
+          
+          # Use the free gemini-2.5-flash model
+          url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
           
           print(f"🎯 Commit: {commit_message}")
           print(f"📁 Changed files: {changed_files}")
+          print(f"🔗 Using model: gemini-2.5-flash")
 
           prompt = f"""
           Create a SINGLE detailed update description for an unblocked games website.
@@ -65,7 +68,7 @@ jobs:
 
           Create ONE comprehensive bullet point that explains:
           1. What file was changed
-          2. What specific change was made inside that file
+          2. What specific change was made inside that file  
           3. How this affects the website when users visit it
 
           Be specific and descriptive. If it's a game file, mention the actual game name and what it does.
@@ -128,7 +131,6 @@ jobs:
               
           except Exception as e:
               print(f"❌ AI generation failed: {e}")
-              # NO FALLBACK - JUST FAIL
               raise Exception("AI generation failed - no fallback template used")
 
           EOF
