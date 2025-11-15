@@ -41,19 +41,19 @@ jobs:
         id: ai
         run: |
           PAYLOAD=$(cat << 'EOF'
-          {
-            "contents": [
-              {
-                "parts": [
-                  {
-                    "text": "Summarize the following website updates into a clean update log entry that normal people can read. Avoid coding jargon. Use 2–4 bullet points.\n\nFORMAT:\n1. Website version (auto-added later)\n2. Date\n3. Changes (bullet points)\n\nCommit Message:\n${{ steps.commit.outputs.message }}\n\nFiles Changed:\n${{ steps.diffstep.outputs.files }}\n\nPatch:\n${{ steps.diffstep.outputs.patch }}"
-                  }
-                ]
-              }
-            ]
-          }
-          EOF
-          )
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Summarize the following website updates into a clean update log entry that normal people can read. Avoid coding jargon. Use 2–4 bullet points.\n\nFORMAT:\n1. Website version (auto-added later)\n2. Date\n3. Changes (bullet points)\n\nCommit Message:\n${{ steps.commit.outputs.message }}\n\nFiles Changed:\n${{ steps.diffstep.outputs.files }}\n\nPatch:\n${{ steps.diffstep.outputs.patch }}"
+        }
+      ]
+    }
+  ]
+}
+EOF
+)
 
           RESPONSE=$(curl -s -X POST \
             -H "Content-Type: application/json" \
@@ -71,11 +71,18 @@ jobs:
           VERSION="1.$(date +%m).$(date +%d).$(git rev-parse --short HEAD)"
           TODAY=$(date +"%B %d, %Y")
 
-          NEW_ENTRY="<div class=\"update-item\">
-<h2 class=\"version-title\">Website Version $VERSION</h2>
-<p class=\"version-date\">$TODAY</p>
-<p>${{ steps.ai.outputs.summary }}</p>
-</div>"
+          NEW_ENTRY=$(cat << 'EOF'
+<div class="update-item">
+  <h2 class="version-title">Website Version VERSION_REPLACE</h2>
+  <p class="version-date">DATE_REPLACE</p>
+  <p>SUMMARY_REPLACE</p>
+</div>
+EOF
+)
+
+          NEW_ENTRY="${NEW_ENTRY//VERSION_REPLACE/$VERSION}"
+          NEW_ENTRY="${NEW_ENTRY//DATE_REPLACE/$TODAY}"
+          NEW_ENTRY="${NEW_ENTRY//SUMMARY_REPLACE/${{ steps.ai.outputs.summary }}}"
 
           sed -i "/<!-- UPDATE_LOG_START -->/a $NEW_ENTRY" ul.html
 
