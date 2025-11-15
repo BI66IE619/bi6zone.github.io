@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Under Construction | BI6ZONE</title>
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Inter", sans-serif;
+    }
+
+    body {
+        background: radial-gradient(circle at top center, #2c2000, #0c0c0c 70%);
+        color: #f8d44c;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        overflow: hidden;
+        position: relative;
+    }
+
+    /* dotted background */
+    body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(#ffffff09 1px, transparent 1px);
+        background-size: 18px 18px;
+        pointer-events: none;
+    }
+
+    .container {
+        position: relative;
+        z-index: 10;
+    }
+
+    .title {
+        font-size: 4.5rem;
+        font-weight: 900;
+        letter-spacing: 4px;
+        text-shadow: 0 0 15px #f8d44c, 0 0 40px #f8d44c;
+    }
+
+    .subtitle {
+        margin-top: 10px;
+        font-size: 1.3rem;
+        color: #f5e3a3;
+        max-width: 650px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .icon {
+        font-size: 4rem;
+        margin-bottom: 18px;
+        text-shadow: 0 0 12px #f8d44c, 0 0 25px #f8d44c;
+    }
+
+    a.button {
+        margin-top: 32px;
+        display: inline-block;
+        padding: 14px 34px;
+        border-radius: 10px;
+        background: rgba(255, 215, 80, 0.12);
+        border: 1px solid rgba(255, 215, 80, 0.3);
+        backdrop-filter: blur(4px);
+        color: #ffe9a3;
+        font-size: 1.1rem;
+        text-decoration: none;
+        transition: 0.2s ease;
+        box-shadow: 0 0 12px rgba(255, 200, 60, 0.3);
+    }
+
+    a.button:hover {
+        background: rgba(255, 215, 80, 0.25);
+        box-shadow: 0 0 20px rgba(255, 200, 60, 0.5);
+    }
+</style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="icon">🚧</div>
+        <div class="title">UNDER&nbsp;CONSTRUCTION</div>
+        <div class="subtitle">
+            This BI6ZONE page is currently being worked on.  
+            Check back soon for updates — something cool is being built here.
+        </div>
+
+        <a class="button" href="/index.html">Back to Home</a>
+    </div>
+</body>
+</html>
