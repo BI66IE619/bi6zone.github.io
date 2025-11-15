@@ -38,7 +38,7 @@ jobs:
           pip3 install requests
 
           python3 << 'EOF'
-          import requests, os, datetime, random, json
+          import requests, os, datetime, random
 
           # Read commit and file changes
           commit_message = open("commit_message.txt").read().strip()
@@ -52,30 +52,23 @@ jobs:
           version_number = f"1.{random.randint(1,20)}.{random.randint(0,9)}"
 
           api_key = os.environ["GEMINI_API_KEY"]
-          
-          # Use the free gemini-2.5-flash model
           url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
           
           print(f"🎯 Commit: {commit_message}")
           print(f"📁 Changed files: {changed_files}")
-          print(f"🔗 Using model: gemini-2.5-flash")
 
           prompt = f"""
-          Create a SINGLE detailed update description for an unblocked games website.
+          Create update for unblocked games website.
 
           Commit: "{commit_message}"
-          Changed files: {changed_files}
+          Files: {changed_files}
 
-          Create ONE comprehensive bullet point that explains:
-          1. What file was changed
-          2. What specific change was made inside that file  
-          3. How this affects the website when users visit it
+          Create ONE bullet point explaining:
+          - File changed
+          - Specific change made  
+          - How it affects users
 
-          Be specific and descriptive. If it's a game file, mention the actual game name and what it does.
-          If it's a style file, describe the visual changes.
-          If it's a proxy file, explain the performance improvements.
-
-          Return ONLY the HTML code with no explanations. Use this exact structure:
+          Return ONLY this HTML:
 
           <div class="update-item" style="animation-delay: 0.1s;">
             <div class="update-header">
@@ -87,7 +80,7 @@ jobs:
             </div>
             <div class="update-content">
               <ul class="update-list">
-                <li>[Your single detailed description with emoji]</li>
+                <li>[Description with emoji]</li>
               </ul>
             </div>
           </div>
@@ -99,10 +92,10 @@ jobs:
                       {"parts": [{"text": prompt}]}
                   ],
                   "generationConfig": {
-                      "temperature": 0.9,
+                      "temperature": 0.8,
                       "topK": 40,
                       "topP": 0.95,
-                      "maxOutputTokens": 500,
+                      "maxOutputTokens": 1000,
                   }
               }
 
@@ -115,24 +108,16 @@ jobs:
                   raise Exception(f"API returned {response.status_code}")
               
               result = response.json()
-              print(f"🔍 Full API response: {json.dumps(result, indent=2)[:500]}...")
               
-              # Extract text from the response - handle different possible response formats
+              # Extract text from response
               ai_text = ""
               if "candidates" in result and len(result["candidates"]) > 0:
                   candidate = result["candidates"][0]
-                  if "content" in candidate:
-                      if "parts" in candidate["content"] and len(candidate["content"]["parts"]) > 0:
-                          ai_text = candidate["content"]["parts"][0].get("text", "")
-                      elif "text" in candidate["content"]:
-                          ai_text = candidate["content"]["text"]
-                  elif "text" in candidate:
-                      ai_text = candidate["text"]
-              elif "text" in result:
-                  ai_text = result["text"]
+                  if "content" in candidate and "parts" in candidate["content"] and len(candidate["content"]["parts"]) > 0:
+                      ai_text = candidate["content"]["parts"][0].get("text", "")
               
               if not ai_text:
-                  print(f"❌ Could not extract text from response: {result}")
+                  print(f"❌ No text in response: {result}")
                   raise Exception("No text content in API response")
               
               # Clean the response
