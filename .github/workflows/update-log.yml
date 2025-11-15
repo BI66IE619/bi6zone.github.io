@@ -1,127 +1,41 @@
-name: Auto Update Log
+- name: Build Gemini prompt
+  id: prompt
+  run: |
+    # Get commit message
+    COMMIT_MSG=$(git log -1 --pretty=format:"%s%n%n%b")
 
-on:
-  push:
-    branches:
-      - main
+    # Get git diff (can be large)
+    GIT_DIFF=$(git show --pretty="" --unified=4)
 
-jobs:
-  generate-update-log:
-    runs-on: ubuntu-latest
+    # Determine current version
+    VERSION=$(grep -oP 'v\K[0-9]+\.[0-9]+\.[0-9]+' ul.html | head -n 1)
+    if [ -z "$VERSION" ]; then VERSION="1.0.0"; fi
 
-    steps:
-      # 1️⃣ Checkout repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    # Increment patch version
+    IFS='.' read -r MAJ MIN PATCH <<< "$VERSION"
+    PATCH=$((PATCH + 1))
+    NEW_VERSION="$MAJ.$MIN.$PATCH"
 
-      # 2️⃣ Get latest commit message
-      - name: Get latest commit message
-        id: commitmsg
-        run: |
-          MSG=$(git log -1 --pretty=format:"%s%n%n%b")
-          {
-            echo "msg<<EOF"
-            echo "$MSG"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      # 3️⃣ Get git diff
-      - name: Get git diff
-        id: diff
-        run: |
-          DIFF=$(git show --pretty="" --unified=4)
-          {
-            echo "diff<<EOF"
-            echo "$DIFF"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      # 4️⃣ Build Gemini prompt
-      - name: Build Gemini prompt
-        id: prompt
-        env:
-          COMMIT_MSG: ${{ steps.commitmsg.outputs.msg }}
-          GIT_DIFF: ${{ steps.diff.outputs.diff }}
-        run: |
-          # Determine current version
-          VERSION=$(grep -oP 'v\K[0-9]+\.[0-9]+\.[0-9]+' ul.html | head -n 1)
-          if [ -z "$VERSION" ]; then VERSION="1.0.0"; fi
-
-          # Increment patch version
-          IFS='.' read -r MAJ MIN PATCH <<< "$VERSION"
-          PATCH=$((PATCH + 1))
-          NEW_VERSION="$MAJ.$MIN.$PATCH"
-
-          # Build prompt for Gemini
-          {
-            echo "text<<EOF"
-            echo "<div class=\"update-item\" style=\"--delay: 1\">"
-            echo "<span class=\"version\">v$NEW_VERSION</span>"
-            echo "<h3>[TITLE]</h3>"
-            echo "<p>[DESCRIPTION]</p>"
-            echo "</div>"
-            echo ""
-            echo "Rules:"
-            echo "- Keep class names EXACTLY the same."
-            echo "- Replace [TITLE] with a short summary of the commit."
-            echo "- Replace [DESCRIPTION] with a simple explanation of the changes."
-            echo "- Do NOT add markdown, bullets, or extra formatting."
-            echo ""
-            echo "Commit Message:"
-            echo "$COMMIT_MSG"
-            echo ""
-            echo "Git Diff:"
-            echo "$GIT_DIFF"
-            echo ""
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      # 5️⃣ Generate HTML block with Gemini
-      - name: Generate update block using Gemini
-        id: gemini
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          PROMPT_TEXT: ${{ steps.prompt.outputs.text }}
-        run: |
-          JSON=$(jq -n --arg text "$PROMPT_TEXT" \
-            '{ contents: [ { parts: [ { text: $text } ] } ] }')
-
-          RESPONSE=$(curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -d "$JSON" \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GEMINI_API_KEY")
-
-          OUTPUT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
-
-          {
-            echo "result<<EOF"
-            echo "$OUTPUT"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-      # 6️⃣ Insert new update block into ul.html
-      - name: Insert update block into ul.html
-        env:
-          GENERATED_UPDATE: ${{ steps.gemini.outputs.result }}
-        run: |
-          TMPFILE=$(mktemp)
-
-          awk -v insert="$GENERATED_UPDATE" '
-            /<h2 class="section-title">Latest Updates<\/h2>/ {
-              print;
-              print insert "\n";
-              next
-            }
-            { print }
-          ' ul.html > "$TMPFILE"
-
-          mv "$TMPFILE" ul.html
-
-      # 7️⃣ Commit changes
-      - name: Commit changes
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add ul.html
-          git commit -m "Auto update log entry" || echo "No changes to commit"
-          git push
+    # Build prompt for Gemini
+    {
+      echo "text<<EOF"
+      echo "<div class=\"update-item\" style=\"--delay: 1\">"
+      echo "<span class=\"version\">v$NEW_VERSION</span>"
+      echo "<h3>[TITLE]</h3>"
+      echo "<p>[DESCRIPTION]</p>"
+      echo "</div>"
+      echo ""
+      echo "Rules:"
+      echo "- Keep class names EXACTLY the same."
+      echo "- Replace [TITLE] with a short summary of the commit."
+      echo "- Replace [DESCRIPTION] with a simple explanation of the changes."
+      echo "- Do NOT add markdown, bullets, or extra formatting."
+      echo ""
+      echo "Commit Message:"
+      echo "$COMMIT_MSG"
+      echo ""
+      echo "Git Diff:"
+      echo "$GIT_DIFF"
+      echo ""
+      echo "EOF"
+    } >> $GITHUB_OUTPUT
