@@ -38,7 +38,7 @@ jobs:
           pip3 install requests
 
           python3 << 'EOF'
-          import requests, os, datetime, random
+          import requests, os, datetime, random, json
 
           # Read commit and file changes
           commit_message = open("commit_message.txt").read().strip()
@@ -115,7 +115,25 @@ jobs:
                   raise Exception(f"API returned {response.status_code}")
               
               result = response.json()
-              ai_text = result["candidates"][0]["content"]["parts"][0]["text"]
+              print(f"🔍 Full API response: {json.dumps(result, indent=2)[:500]}...")
+              
+              # Extract text from the response - handle different possible response formats
+              ai_text = ""
+              if "candidates" in result and len(result["candidates"]) > 0:
+                  candidate = result["candidates"][0]
+                  if "content" in candidate:
+                      if "parts" in candidate["content"] and len(candidate["content"]["parts"]) > 0:
+                          ai_text = candidate["content"]["parts"][0].get("text", "")
+                      elif "text" in candidate["content"]:
+                          ai_text = candidate["content"]["text"]
+                  elif "text" in candidate:
+                      ai_text = candidate["text"]
+              elif "text" in result:
+                  ai_text = result["text"]
+              
+              if not ai_text:
+                  print(f"❌ Could not extract text from response: {result}")
+                  raise Exception("No text content in API response")
               
               # Clean the response
               cleaned_text = ai_text.strip()
