@@ -1,514 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BI6ZONE - Update Log</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Update Log</title>
+
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            min-height: 100vh;
-            background: radial-gradient(ellipse at top, hsl(45, 100%, 15%) 0%, hsl(0, 0%, 5%) 50%, hsl(0, 0%, 0%) 100%);
-            position: relative;
-            overflow-x: hidden;
-            line-height: 1.6;
-        }
-
-        /* Halftone pattern overlays */
-        body::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-            background-size: 20px 20px;
-            mask-image: radial-gradient(ellipse at center, black 40%, transparent 70%);
-            opacity: 0.3;
-            pointer-events: none;
-        }
-
-        body::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background-image: radial-gradient(circle, rgba(255,255,255,0.05) 2px, transparent 2px);
-            background-size: 40px 40px;
-            mask-image: radial-gradient(ellipse at 70% 30%, black 30%, transparent 60%);
-            opacity: 0.2;
-            pointer-events: none;
-        }
-
-        /* Animations */
-        @keyframes slideInFromTop {
-            0% {
-                transform: translateY(-100px);
-                opacity: 0;
-            }
-            100% {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes slideInFromLeft {
-            0% {
-                transform: translateX(-50px);
-                opacity: 0;
-            }
-            100% {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.7;
-            }
-        }
-
-        .container {
-            position: relative;
-            z-index: 10;
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 2rem;
-            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(to right, #0f0f0f, #1a1a1a);
+            font-family: Arial, sans-serif;
+            color: white;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 3rem;
-            animation: slideInFromTop 0.8s ease-out;
+            padding: 40px 20px;
         }
 
-        .title {
-            font-size: 3rem;
-            font-weight: 900;
-            color: hsl(45, 100%, 70%);
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.025em;
-            text-shadow: 
-                0 0 20px hsl(45, 100%, 50%), 
-                0 0 40px hsl(45, 100%, 50%), 
-                0 0 60px hsl(45, 100%, 50%);
-        }
-
-        .subtitle {
-            color: hsl(45, 50%, 50%);
-            font-size: 1.2rem;
-            font-weight: 300;
-        }
-
-        .current-version {
-            background: rgba(255, 215, 0, 0.15);
-            border: 2px solid rgba(255, 215, 0, 0.5);
-            border-radius: 1rem;
-            backdrop-filter: blur(8px);
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            text-align: center;
-            animation: slideInFromTop 1s ease-out 0.2s both;
-            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
-        }
-
-        .current-version-label {
-            color: hsl(45, 100%, 85%);
-            font-size: 0.9rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 0.5rem;
-        }
-
-        .current-version-number {
-            color: hsl(45, 100%, 70%);
-            font-size: 2rem;
-            font-weight: 700;
-            text-shadow: 0 0 20px hsl(45, 100%, 50%);
+        h1 {
+            font-size: 2.8rem;
+            margin: 0;
         }
 
         .content {
-            animation: slideInFromTop 1s ease-out 0.4s both;
+            padding: 30px;
+            max-width: 900px;
+            margin: auto;
         }
 
         .version-section {
-            margin-bottom: 2rem;
+            margin-bottom: 40px;
         }
 
         .section-title {
-            color: hsl(45, 100%, 80%);
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            padding-left: 0.5rem;
-            border-left: 3px solid hsl(45, 100%, 70%);
+            font-size: 2rem;
+            margin-bottom: 20px;
         }
 
         .update-item {
-            background: rgba(255, 215, 0, 0.1);
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 1rem;
-            backdrop-filter: blur(8px);
-            margin-bottom: 1.5rem;
-            overflow: hidden;
-            transition: all 0.3s ease;
-            animation: slideInFromLeft 0.8s ease-out calc(var(--delay) * 0.1s) both;
-        }
-
-        .update-item:hover {
-            border-color: rgba(255, 215, 0, 0.5);
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
-            transform: translateY(-2px);
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            animation: fadeIn 0.4s ease forwards;
+            opacity: 0;
         }
 
         .update-header {
-            padding: 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+            margin-bottom: 10px;
         }
 
         .version-info {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 10px;
         }
 
         .version-badge {
-            background: rgba(255, 215, 0, 0.2);
-            color: hsl(45, 100%, 85%);
-            padding: 0.25rem 0.75rem;
-            border-radius: 0.5rem;
-            font-size: 0.9rem;
-            font-weight: 600;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-        }
-
-        .version-title {
-            color: hsl(45, 100%, 70%);
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-
-        .version-date {
-            color: hsl(45, 60%, 60%);
-            font-size: 0.9rem;
-            font-weight: 400;
-        }
-
-        .update-content {
-            padding: 0 1.5rem 1.5rem 1.5rem;
-        }
-
-        .update-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .update-list li {
-            color: hsl(45, 80%, 80%);
-            margin-bottom: 0.75rem;
-            position: relative;
-            padding-left: 1.5rem;
-            line-height: 1.6;
-        }
-
-        .update-list li::before {
-            content: '▸';
-            position: absolute;
-            left: 0;
-            color: hsl(45, 100%, 70%);
+            background: #ffc107;
+            color: black;
+            padding: 5px 12px;
+            border-radius: 6px;
             font-weight: bold;
         }
 
-
-        .footer {
-            text-align: center;
-            margin-top: 3rem;
-            animation: slideInFromTop 1.2s ease-out 0.6s both;
+        .version-title {
+            margin: 0;
         }
 
-        .back-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: hsl(45, 100%, 70%);
-            text-decoration: none;
-            background: rgba(255, 215, 0, 0.1);
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 0.75rem;
-            backdrop-filter: blur(8px);
-            padding: 0.75rem 1.5rem;
-            transition: all 0.3s ease;
-            font-size: 0.9rem;
-            font-weight: 300;
+        .version-date {
+            opacity: 0.7;
         }
 
-        .back-link:hover {
-            background: rgba(255, 215, 0, 0.2);
-            border-color: rgba(255, 215, 0, 0.5);
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
-            transform: translateY(-2px);
+        .update-list {
+            margin: 0;
+            padding-left: 20px;
         }
 
-        @media (min-width: 768px) {
-            .title {
-                font-size: 4rem;
-            }
-        }
-
-        @media (max-width: 640px) {
-            .container {
-                padding: 1rem;
-            }
-            
-            .title {
-                font-size: 2.5rem;
-            }
-            
-            .update-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-            }
-
-            .version-info {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-            }
-
-            .update-item {
-                margin-bottom: 1rem;
-            }
-
-            .update-header {
-                padding: 1rem;
-            }
-
-            .update-content {
-                padding: 0 1rem 1rem 1rem;
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1 class="title">Update Log</h1>
-            <p class="subtitle">Track all updates and improvements to BI6ZONE</p>
-        </div>
 
-        <!-- Current Version -->
-        <div class="current-version">
-            <div class="current-version-label">Latest Version</div>
-            <div class="current-version-number">v3.4.0</div>
-        </div>
+    <div class="header">
+        <h1>Update Log</h1>
+    </div>
 
-        <!-- Updates Content -->
-        <div class="content">
-            <!-- Latest Updates - Move completed versions to "Previous Versions" section below -->
-            <div class="version-section">
-                <h2 class="section-title">Latest Updates</h2>
-                
-                <!-- ========== CURRENT VERSION ========== -->
-                <div class="update-item" style="--delay: 1">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v3.4</span>
-                            <h3 class="version-title">Overall Game Improvement</h3>
-                        </div>
-                        <span class="version-date">Sep 25, 2025</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>Over 50+ Games Fixed Due To Build Shutdowns</li>
-                            <li>5+ New Games Added</li>
-                            <li>Selfhosted Games & URL Fix</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div class="update-item" style="--delay: 1">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v3.0</span>
-                            <h3 class="version-title">Core Update P1</h3>
-                        </div>
-                        <span class="version-date">August 27, 2025</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>10+ Major Game Titles Added</li>
-                            <li>New Music Player</li>
-                            <li>Exploits Tab Moved To Apps (Replaced With Music)</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div class="update-item" style="--delay: 1">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v2.8</span>
-                            <h3 class="version-title">The Holy Grail</h3>
-                        </div>
-                        <span class="version-date">August 16, 2025</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>New Web Proxy Added</li>
-                            <li>New Movies And Shows</li>
-                            <li>3+ Games Added</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div class="update-item" style="--delay: 1">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v2.5</span>
-                            <h3 class="version-title">User UI Expansions</h3>
-                        </div>
-                        <span class="version-date">August 6, 2025</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>5+ New Games Added</li>
-                            <li>New Revamped Discord Remake UI</li>
-                            <li>More HwBot Improvements And Tools</li>
-                            <li>New Apps Added</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div class="update-item" style="--delay: 1">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v2.1</span>
-                            <h3 class="version-title">Enhanced User Experience</h3>
-                        </div>
-                        <span class="version-date">August 3, 2025</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>10+ New Games Added</li>
-                            <li>Faster loading times across all sections</li>
-                            <li>Mobile-responsive design overhaul</li>
-                            <li>New Improved UI</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div class="update-item" style="--delay: 2">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v2.0</span>
-                            <h3 class="version-title">Security & Performance</h3>
-                        </div>
-                        <span class="version-date">January 8, 2024</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>Enhanced performance protocols</li>
-                            <li>Game loading optimization</li>
-                            <li>Added 15 new unblocked games</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <div class="update-item" style="--delay: 3">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v2.0</span>
-                            <h3 class="version-title">Major Platform Redesign</h3>
-                        </div>
-                        <span class="version-date">December 20, 2023</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>Complete UI/UX redesign</li>
-                            <li>HWBot AI assistant integration</li>
-                            <li>Better categorization of games and apps</li>
-                            <li>Advanced proxy management system</li>
-                        </ul>
-                    </div>
-                </div>
+    <div class="content">
+        <div class="version-section">
 
-                <div class="update-item" style="--delay: 4">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v1.8</span>
-                            <h3 class="version-title">Content Expansion</h3>
-                        </div>
-                        <span class="version-date">November 30, 2023</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>Added 50+ new games to the library</li>
-                            <li>Search functionality with filters</li>
-                            <li>Various bug fixes and optimizations</li>
-                        </ul>
-                    </div>
-                </div>
+            <!-- ==================================================== -->
+            <!-- AUTO-GENERATED UPDATES ONLY (Injected by GitHub Action) -->
+            <!-- UPDATE_LOG_START -->
+            <!-- UPDATE_LOG_END -->
+            <!-- ==================================================== -->
 
-                <div class="update-item" style="--delay: 5">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v1.7</span>
-                            <h3 class="version-title">Community Features</h3>
-                        </div>
-                        <span class="version-date">November 15, 2023</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>User support system</li>
-                            <li>Request feature for games and apps</li>
-                            <li>Overall site performance</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="update-item" style="--delay: 6">
-                    <div class="update-header">
-                        <div class="version-info">
-                            <span class="version-badge">v1.5</span>
-                            <h3 class="version-title">Foundation Release</h3>
-                        </div>
-                        <span class="version-date">October 1, 2023</span>
-                    </div>
-                    <div class="update-content">
-                        <ul class="update-list">
-                            <li>Initial BI6ZONE platform launch</li>
-                            <li>Core games and apps library</li>
-                            <li>Basic proxy functionality</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            <a href="/" class="back-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="m12 19-7-7 7-7"/>
-                    <path d="M19 12H5"/>
-                </svg>
-                Back to BI6ZONE
-            </a>
         </div>
     </div>
+
 </body>
 </html>
