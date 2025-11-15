@@ -49,9 +49,12 @@ jobs:
           version_number = f"1.{random.randint(1,20)}.{random.randint(0,9)}"
 
           api_key = os.environ["GEMINI_API_KEY"]
-          url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
-
+          
+          # Use the correct Gemini API endpoint
+          url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+          
           print(f"🎯 Using commit message: {commit_message}")
+          print(f"🔗 API URL: {url.split('?')[0]}")  # Don't print the key
 
           prompt = f"""
           Create an engaging HTML update card for an unblocked games website based on this git commit: "{commit_message}"
@@ -90,8 +93,13 @@ jobs:
                   }
               }
 
+              print("🚀 Sending request to Gemini API...")
               response = requests.post(url, json=payload, timeout=30)
-              response.raise_for_status()
+              print(f"📡 Response status: {response.status_code}")
+              
+              if response.status_code != 200:
+                  print(f"❌ API Error {response.status_code}: {response.text}")
+                  raise Exception(f"API returned {response.status_code}")
               
               result = response.json()
               ai_text = result["candidates"][0]["content"]["parts"][0]["text"]
@@ -105,6 +113,7 @@ jobs:
                   f.write(cleaned_text)
                   
               print("✅ AI-generated content saved!")
+              print("📝 Generated content:")
               print(cleaned_text)
               
           except Exception as e:
