@@ -18,13 +18,21 @@ jobs:
         id: commitmsg
         run: |
           MSG=$(git log -1 --pretty=format:"%s%n%n%b")
-          printf "msg<<EOF\n%s\nEOF\n" "$MSG" >> $GITHUB_OUTPUT
+          {
+            echo "msg<<EOF"
+            echo "$MSG"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Get git diff
         id: diff
         run: |
           DIFF=$(git show --pretty="" --unified=4)
-          printf "diff<<EOF\n%s\nEOF\n" "$DIFF" >> $GITHUB_OUTPUT
+          {
+            echo "diff<<EOF"
+            echo "$DIFF"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Build Gemini prompt
         id: prompt
@@ -38,7 +46,7 @@ jobs:
 
           {
             echo "text<<EOF"
-            echo "Generate an HTML update block matching EXACTLY this structure:"
+            echo "Generate an HTML update block using this template exactly:"
             echo ""
             echo "<div class=\"update-item\" style=\"--delay: 1\">"
             echo "<span class=\"version\">v${NEW_VERSION}</span>"
@@ -47,11 +55,10 @@ jobs:
             echo "</div>"
             echo ""
             echo "Rules:"
-            echo "- Replace [TITLE] with a short, accurate title based on commit message + diff."
-            echo "- Replace [DESCRIPTION] with a simple paragraph explaining main changes."
-            echo "- NO extra formatting, no bullets, no markdown."
-            echo "- Keep the class names EXACT and unchanged."
-            echo "- ONLY output the HTML block."
+            echo "- Keep the class names EXACTLY the same."
+            echo "- Replace [TITLE] with a short summary of the commit."
+            echo "- Replace [DESCRIPTION] with a simple explanation of the changes."
+            echo "- Do NOT add markdown, bullets, or extra formatting."
             echo ""
             echo "Commit Message:"
             echo "${{ steps.commitmsg.outputs.msg }}"
@@ -77,18 +84,25 @@ jobs:
 
           OUTPUT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
 
-          printf "result<<EOF\n%s\nEOF\n" "$OUTPUT" >> $GITHUB_OUTPUT
+          {
+            echo "result<<EOF"
+            echo "$OUTPUT"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Insert update block into ul.html
         run: |
           TMPFILE=$(mktemp)
+
           awk -v insert="${{ steps.gemini.outputs.result }}" '
             /<h2 class="section-title">Latest Updates<\/h2>/ {
               print;
               print insert "\n";
-              next
-            }1
+              next;
+            }
+            { print }
           ' ul.html > "$TMPFILE"
+
           mv "$TMPFILE" ul.html
 
       - name: Commit changes
@@ -96,5 +110,5 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add ul.html
-          git commit -m "Auto update log entry" || echo "No changes to commit."
+          git commit -m "Auto update log entry" || echo "No changes"
           git push
