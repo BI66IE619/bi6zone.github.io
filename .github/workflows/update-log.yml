@@ -16,68 +16,65 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0 # Get full history for better AI context
+          fetch-depth: 0
 
       - name: 📝 Get recent commits context
         run: |
           # Get multiple recent commits for better context
-          git log -5 --pretty=format:"%h - %s (%an)" > recent_commits.txt
-          echo "Recent commits:"
+          git log -3 --pretty=format:"%s" > recent_commits.txt
+          echo "Recent commits for AI context:"
           cat recent_commits.txt
-          
-          # Get changed files for context
-          git diff --name-only HEAD~1 HEAD > changed_files.txt 2>/dev/null || echo "Initial commit" > changed_files.txt
 
       - name: 🤖 Generate AI update block (Gemini)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 python3-pip jq
+          sudo apt-get install -y python3 python3-pip
           pip3 install requests
 
           python3 << 'EOF'
-          import requests, os, datetime, json, subprocess
+          import requests, os, datetime, json, random
 
           # Get commit context
           commit_text = open("recent_commits.txt").read().strip()
-          changed_files = open("changed_files.txt").read().strip()
           today = datetime.date.today().strftime("%B %d, %Y")
           
-          # Try to get version from package.json or generate incremental version
-          try:
-              with open('package.json') as f:
-                  package_data = json.load(f)
-                  version = package_data.get('version', '1.0.0')
-          except:
-              version = "1.0.0"
+          # Generate fun version name
+          version_names = ["Quantum", "Phoenix", "Nebula", "Velocity", "Horizon", "Infinity", "Cosmic", "Synergy"]
+          version_adjectives = ["Update", "Release", "Launch", "Drop", "Upgrade", "Evolution"]
+          
+          version_name = f"{random.choice(version_names)} {random.choice(version_adjectives)}"
+          version_number = f"1.{random.randint(1,20)}.{random.randint(0,9)}"
 
           api_key = os.environ["GEMINI_API_KEY"]
           url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
 
           prompt = f"""
-          Create ONLY an HTML update card. No explanations. Use exactly this structure:
+          Create an engaging HTML update card for a gaming website. Based on these git commits: {commit_text}
+          
+          Return ONLY this exact HTML structure, no other text:
 
-          <div class='update-item'>
-            <div class='update-header'>
-              <div class='version-info'>
-                <span class='version-badge'>v{version}</span>
-                <h3 class='version-title'>AI Auto Update</h3>
+          <div class="update-item" style="animation-delay: 0.1s;">
+            <div class="update-header">
+              <div class="version-info">
+                <span class="version-badge">v{version_number}</span>
+                <h3 class="version-title">{version_name}</h3>
               </div>
-              <span class='version-date'>{today}</span>
+              <span class="version-date">{today}</span>
             </div>
-            <div class='update-content'>
-              <ul class='update-list'>
-                <!-- Generate 3-5 bullet points based on these recent commits: {commit_text} -->
-                <!-- Focus on: new games added, bug fixes, UI improvements, performance updates -->
-                <!-- Use gaming-related emojis like 🎮, 🚀, 🐛, ✨, 🎯, 📱 -->
-                <!-- Make it exciting for gamers! -->
-                <!-- If files changed include: {changed_files} consider what was modified -->
+            <div class="update-content">
+              <ul class="update-list">
+                <!-- Create 3-4 exciting bullet points about gaming updates -->
+                <!-- Use gaming emojis like 🎮, 🚀, 🎯, ✨, 🐛, 📱, 🕹️ -->
+                <!-- Make it sound fun and engaging for gamers -->
+                <!-- Focus on: new games, improvements, bug fixes, features -->
+                <!-- Example: <li>✨ Added 5 new arcade games including...</li> -->
               </ul>
             </div>
           </div>
 
-          Important: Return ONLY the HTML, no markdown, no explanations.
+          Important: Return ONLY the HTML code, no markdown, no explanations, no backticks.
           """
 
           payload = {
@@ -85,10 +82,10 @@ jobs:
                   {"parts": [{"text": prompt}]}
               ],
               "generationConfig": {
-                  "temperature": 0.7,
+                  "temperature": 0.8,
                   "topK": 40,
                   "topP": 0.95,
-                  "maxOutputTokens": 1024,
+                  "maxOutputTokens": 500,
               }
           }
 
@@ -96,83 +93,92 @@ jobs:
               r = requests.post(url, json=payload, timeout=30)
               r.raise_for_status()
               
-              text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-              # Clean up the response
-              text = text.strip().replace('```html', '').replace('```', '').strip()
+              response_text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
               
+              # Clean up the response - remove any markdown code blocks
+              clean_html = response_text.strip()
+              clean_html = clean_html.replace('```html', '').replace('```', '').strip()
+              
+              # Validate we got proper HTML
+              if '<div class="update-item"' in clean_html and '<li>' in clean_html:
+                  open("new_update.html", "w").write(clean_html)
+                  print("✅ Successfully generated AI update card!")
+                  print(clean_html)
+              else:
+                  raise Exception("AI response doesn't contain valid HTML structure")
+                  
           except Exception as e:
-              print(f"API Error: {e}")
+              print(f"❌ AI Generation failed: {e}")
+              print("Using fallback update card...")
+              
               # Fallback update card
-              text = f'''
-              <div class='update-item'>
-                <div class='update-header'>
-                  <div class='version-info'>
-                    <span class='version-badge'>v{version}</span>
-                    <h3 class='version-title'>Auto Update</h3>
+              fallback_html = f'''
+              <div class="update-item" style="animation-delay: 0.1s;">
+                <div class="update-header">
+                  <div class="version-info">
+                    <span class="version-badge">v{version_number}</span>
+                    <h3 class="version-title">{version_name}</h3>
                   </div>
-                  <span class='version-date'>{today}</span>
+                  <span class="version-date">{today}</span>
                 </div>
-                <div class='update-content'>
-                  <ul class='update-list'>
-                    <li>🚀 Automatic update based on recent changes</li>
-                    <li>🔧 Improvements and bug fixes</li>
-                    <li>🎮 Enhanced gaming experience</li>
+                <div class="update-content">
+                  <ul class="update-list">
+                    <li>🎮 Automatic game updates and improvements</li>
+                    <li>🚀 Enhanced performance and loading times</li>
+                    <li>✨ Better gaming experience with latest fixes</li>
+                    <li>🎯 New features and gameplay enhancements</li>
                   </ul>
                 </div>
               </div>
               '''
-
-          open("new_update.html", "w").write(text)
-          print("Generated update card:")
-          print(text)
+              open("new_update.html", "w").write(fallback_html.strip())
           EOF
 
-      - name: 📊 Create backup and insert update
+      - name: 📋 Insert update into HTML
         run: |
-          # Create backup
-          cp ul.html ul_backup.html
-          
-          # Insert new update at the top
+          # Read the generated update
           NEW_UPDATE=$(cat new_update.html)
+          echo "Inserting update into ul.html..."
           
-          # Use a more robust insertion method
-          if grep -q "<!-- UPDATE_LOG_START -->" ul.html; then
-              # Insert after UPDATE_LOG_START comment
-              awk -v update="$NEW_UPDATE" '
-                /<!-- UPDATE_LOG_START -->/ {print; print update; next}
-                1
-              ' ul.html > ul_temp.html
-          else
-              # Create structure if it doesn't exist
-              echo "<!-- UPDATE_LOG_START -->" > ul_temp.html
-              echo "$NEW_UPDATE" >> ul_temp.html
-              echo "<!-- UPDATE_LOG_END -->" >> ul_temp.html
-              cat ul.html >> ul_temp.html
-          fi
+          # Create temporary file with the update inserted
+          awk -v update="$NEW_UPDATE" '
+            /<!-- UPDATE_LOG_START -->/ {
+                print "            <!-- UPDATE_LOG_START -->"
+                print "            " update
+                next
+            }
+            /<!-- UPDATE_LOG_END -->/ {
+                print "            <!-- UPDATE_LOG_END -->"
+                next
+            }
+            1
+          ' ul.html > ul_temp.html
           
+          # Replace original file
           mv ul_temp.html ul.html
-          echo "✅ Update inserted successfully"
+          echo "✅ Update successfully inserted!"
 
-      - name: 🎯 Validate HTML
+      - name: 🔍 Verify the update was inserted
         run: |
-          # Basic validation that the file was modified
-          if ! grep -q "update-item" ul.html; then
-            echo "❌ Error: Update not found in ul.html"
+          if grep -q "update-item" ul.html; then
+            echo "✅ Update card found in HTML - success!"
+            echo "Preview of inserted content:"
+            grep -A 10 "<!-- UPDATE_LOG_START -->" ul.html | head -15
+          else
+            echo "❌ Error: Update card not found in HTML"
             exit 1
           fi
-          echo "✅ HTML validation passed"
 
       - name: 📤 Commit and push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ul.html
-          git diff --staged --quiet || git commit -m "🤖 AI Auto Update: $(date +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "🤖 AI Auto Update: $(date +'%Y-%m-%d %H:%M')"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🧹 Cleanup
         if: always()
-        run: |
-          rm -f new_update.html recent_commits.txt changed_files.txt commit.txt ul_backup.html
+        run: rm -f new_update.html recent_commits.txt
