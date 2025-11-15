@@ -1,201 +1,79 @@
-name: 🤖 AI Auto Update Log
+name: Auto Update Log
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
-  generate-update:
+  generate-log:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'Auto AI Update Log')"
 
     steps:
-      - name: 🚀 Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: 📝 Get full commit information
+      - name: Get previous tag
+        id: prev
         run: |
-          echo "=== COMMIT SUBJECT ==="
-          git log -1 --pretty=%s > commit_subject.txt
-          echo "=== COMMIT DESCRIPTION ==="
-          git log -1 --pretty=%b > commit_description.txt
-          echo "=== CHANGED FILES ==="
-          git diff --name-only HEAD~1 HEAD > changed_files.txt 2>/dev/null || echo "Initial commit" > changed_files.txt
-          
-          echo "Subject: $(cat commit_subject.txt)"
-          echo "Description: $(cat commit_description.txt)"
-          echo "Files: $(cat changed_files.txt)"
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0.0")
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: 🤖 Generate AI update block (Gemini)
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Create new version number
+        id: version
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip
-          pip3 install requests
+          OLD=${{ steps.prev.outputs.tag }}
+          BASE=$(echo "$OLD" | sed 's/v//')
+          PART4=$(( $(echo $BASE | awk -F. '{print $4}') + 1 ))
+          NEW="v1.0.0.$PART4"
+          echo "new_version=$NEW" >> $GITHUB_OUTPUT
 
-          python3 << 'EOF'
-          import requests, os, datetime, random
-
-          # Read commit subject, description, and file changes
-          commit_subject = open("commit_subject.txt").read().strip()
-          commit_description = open("commit_description.txt").read().strip()
-          changed_files = open("changed_files.txt").read().strip()
-          today = datetime.date.today().strftime("%B %d, %Y")
-          
-          # Generate version number only (AI will create the title)
-          version_number = f"1.{random.randint(1,20)}.{random.randint(0,9)}"
-
-          api_key = os.environ["GEMINI_API_KEY"]
-          url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
-          
-          print(f"🎯 Commit Subject: {commit_subject}")
-          print(f"📝 Commit Description: {commit_description}")
-          print(f"📁 Changed files: {changed_files}")
-
-          # Build the prompt based on available commit information
-          commit_info = f"Subject: {commit_subject}"
-          if commit_description:
-              commit_info += f"\nDescription: {commit_description}"
-
-          prompt = f"""
-          Create an engaging update for an unblocked games website.
-
-          COMMIT INFORMATION:
-          {commit_info}
-
-          FILES CHANGED:
-          {changed_files}
-
-          Create:
-          1. A creative, relevant TITLE based on the commit
-          2. ONE descriptive bullet point that summarizes the changes
-
-          Use the commit description to understand what was actually changed.
-          Make it exciting for gamers!
-
-          Return ONLY this HTML:
-
-          <div class="update-item" style="animation-delay: 0.1s;">
-            <div class="update-header">
-              <div class="version-info">
-                <span class="version-badge">v{version_number}</span>
-                <h3 class="version-title">[CREATIVE TITLE]</h3>
-              </div>
-              <span class="version-date">{today}</span>
-            </div>
-            <div class="update-content">
-              <ul class="update-list">
-                <li>[DESCRIPTION BASED ON COMMIT INFO]</li>
-              </ul>
-            </div>
-          </div>
-          """
-
-          try:
-              payload = {
-                  "contents": [
-                      {"parts": [{"text": prompt}]}
-                  ],
-                  "generationConfig": {
-                      "temperature": 0.8,
-                      "topK": 40,
-                      "topP": 0.95,
-                      "maxOutputTokens": 600,
-                  }
-              }
-
-              print("🚀 Sending request to Gemini API...")
-              response = requests.post(url, json=payload, timeout=30)
-              print(f"📡 Response status: {response.status_code}")
-              
-              if response.status_code != 200:
-                  print(f"❌ API Error {response.status_code}: {response.text}")
-                  raise Exception(f"API returned {response.status_code}")
-              
-              result = response.json()
-              
-              # Extract text from response
-              ai_text = ""
-              if "candidates" in result and len(result["candidates"]) > 0:
-                  candidate = result["candidates"][0]
-                  if "content" in candidate and "parts" in candidate["content"] and len(candidate["content"]["parts"]) > 0:
-                      ai_text = candidate["content"]["parts"][0].get("text", "")
-              
-              if not ai_text:
-                  print(f"❌ No text in response: {result}")
-                  raise Exception("No text content in API response")
-              
-              # Clean the response
-              cleaned_text = ai_text.strip()
-              cleaned_text = cleaned_text.replace('```html', '').replace('```', '').strip()
-              
-              # Save the AI-generated content
-              with open("new_update.html", "w") as f:
-                  f.write(cleaned_text)
-                  
-              print("✅ AI-generated content saved!")
-              print("📝 Generated content:")
-              print(cleaned_text)
-              
-          except Exception as e:
-              print(f"❌ AI generation failed: {e}")
-              raise Exception("AI generation failed - no fallback template used")
-
-          EOF
-
-      - name: 📋 Safe HTML insertion using Python
+      - name: Get diff
+        id: diffstep
         run: |
-          python3 << 'EOF'
-          import re
-          
-          # Read the generated update
-          with open("new_update.html", "r") as f:
-              new_update = f.read().strip()
-          
-          # Read the current ul.html
-          with open("ul.html", "r") as f:
-              content = f.read()
-          
-          # Remove existing content between the markers
-          pattern = r'(<!-- UPDATE_LOG_START -->\s*).*?(\s*<!-- UPDATE_LOG_END -->)'
-          replacement = r'\1' + new_update + r'\2'
-          
-          new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-          
-          # Write the updated content back
-          with open("ul.html", "w") as f:
-              f.write(new_content)
-          
-          print("✅ Update successfully inserted into ul.html")
-          EOF
+          DIFF=$(git log -1 --pretty=format: --name-status HEAD)
+          PATCH=$(git diff HEAD~1 HEAD)
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "patch<<EOF" >> $GITHUB_OUTPUT
+          echo "$PATCH" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: 🔍 Verify the update was inserted
+      - name: Generate AI Summary (Gemini Flash)
+        id: ai
         run: |
-          echo "=== VERIFYING INSERTION ==="
-          if grep -q "update-item" ul.html; then
-            echo "✅ Update card found in ul.html"
-            echo "=== FULL INSERTED CONTENT ==="
-            sed -n '/<!-- UPDATE_LOG_START -->/,/<!-- UPDATE_LOG_END -->/p' ul.html
-          else
-            echo "❌ Error: Update card not found in HTML"
-            exit 1
-          fi
+          SUMMARY=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "{
+              'contents':[{
+                'parts':[{
+                  'text': 'Summarize these website code changes into a clear update log note for normal users (not coders). Do NOT include code. Make it readable and normal. Use 2–4 bullet points.\n\nFiles Changed:\n${{ steps.diffstep.outputs.diff }}\n\nPatch:\n${{ steps.diffstep.outputs.patch }}'
+                }]
+              }]
+            }" \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyDbsKCMD-m3Sj-9c_z7SxzIQxfTBBUiZj0" \
+            | jq -r '.candidates[0].content.parts[0].text')
 
-      - name: 📤 Commit and push changes
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+
+      - name: Insert update into ul.html
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          VERSION=${{ steps.version.outputs.new_version }}
+          DATE=$(date +"%Y-%m-%d")
+          SUMMARY="${{ steps.ai.outputs.summary }}"
+
+          INSERT="<li><strong>$VERSION</strong> — $DATE<br>$SUMMARY</li>"
+
+          sed -i "s|<!-- UPDATES HERE -->|$INSERT\n<!-- UPDATES HERE -->|" ul.html
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add ul.html
-          git diff --staged --quiet || git commit -m "🤖 AI Auto Update: $(date +'%Y-%m-%d %H:%M')"
-          git push
-
-      - name: 🧹 Cleanup
-        run: rm -f new_update.html commit_subject.txt commit_description.txt changed_files.txt
+          git commit -m "Automated update log entry"
+          git tag ${{ steps.version.outputs.new_version }}
+          git push --follow-tags
