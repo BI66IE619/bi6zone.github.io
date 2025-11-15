@@ -1,52 +1,63 @@
-name: Auto Update Log
+name: Auto Update Log (Gemini 2.5)
 
 on:
   push:
     branches:
       - main
       - master
+    paths-ignore:
+      - "ul.html"   # avoid infinite loop when the workflow updates ul.html
+
+permissions:
+  contents: write
 
 jobs:
   generate-update-log:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (full history for diff)
         uses: actions/checkout@v3
         with:
           fetch-depth: 2
 
-      - name: Get Commit Info
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Get commit message
         id: commit
         run: |
           echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
+          git log -1 --pretty=%B >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Get File Diff
-        id: diffstep
+      - name: Get changed files and full patch
+        id: diff
         run: |
-          FILES=$(git diff --name-only HEAD~1 HEAD)
-          PATCH=$(git diff HEAD~1 HEAD)
-
+          FILES=$(git diff --name-only HEAD~1 HEAD || true)
+          PATCH=$(git diff HEAD~1 HEAD || true)
           echo "files<<EOF" >> $GITHUB_OUTPUT
           echo "$FILES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-
           echo "patch<<EOF" >> $GITHUB_OUTPUT
           echo "$PATCH" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Generate AI Summary (Gemini 2.5 Flash)
+      - name: Request human-friendly summary from Gemini 2.5
         id: ai
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          PAYLOAD=$(cat << 'EOF'
+          # Build JSON payload safely (variables expanded)
+          PAYLOAD=$(cat <<EOF
 {
   "contents": [
     {
       "parts": [
         {
-          "text": "Summarize the following website updates into a clean update log entry that normal people can read. Avoid coding jargon. Use 2–4 bullet points.\n\nFORMAT:\n1. Website version (auto-added later)\n2. Date\n3. Changes (bullet points)\n\nCommit Message:\n${{ steps.commit.outputs.message }}\n\nFiles Changed:\n${{ steps.diffstep.outputs.files }}\n\nPatch:\n${{ steps.diffstep.outputs.patch }}"
+          "text": "You are an assistant that writes website update notes for non-coders. Read the commit message, file list, and code diff below and produce 2–4 short, clear bullet points describing what changed, written in simple non-technical language (no code, no diffs). Each bullet should be on its own line. Keep it concise and professional.\n\nCommit message:\n${{ steps.commit.outputs.message }}\n\nFiles changed:\n${{ steps.diff.outputs.files }}\n\nCode patch:\n${{ steps.diff.outputs.patch }}"
         }
       ]
     }
@@ -55,41 +66,81 @@ jobs:
 EOF
 )
 
+          # Call Gemini 2.5 Flash
           RESPONSE=$(curl -s -X POST \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" )
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}")
 
-          SUMMARY=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          echo "RAW_RESPONSE<<EOF" >> $GITHUB_OUTPUT
+          echo "$RESPONSE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Extract text safely
+          SUMMARY=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // ""' | sed 's/\r//g')
+
+          if [ -z "$SUMMARY" ]; then
+            echo "ERROR: Gemini returned empty summary. Response printed above."
+            exit 1
+          fi
 
           echo "summary<<EOF" >> $GITHUB_OUTPUT
           echo "$SUMMARY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Insert Update Into ul.html
+      - name: Build HTML entry and insert into ul.html
         run: |
+          # compute version and date
           VERSION="1.$(date +%m).$(date +%d).$(git rev-parse --short HEAD)"
           TODAY=$(date +"%B %d, %Y")
 
-          NEW_ENTRY=$(cat << 'EOF'
+          # get the AI summary (multiple lines)
+          AI_SUMMARY="${{ steps.ai.outputs.summary }}"
+
+          # escape HTML characters in summary lines (simple replacement)
+          escape() {
+            echo "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+          }
+
+          # create list items from each non-empty line
+          LIST_FILE=$(mktemp)
+          echo "$AI_SUMMARY" | sed '/^\s*$/d' | while IFS= read -r line; do
+            esc=$(escape "$line")
+            printf "    <li>%s</li>\n" "$esc" >> "$LIST_FILE"
+          done
+
+          # build the full HTML block into a temp file
+          ENTRY_FILE=$(mktemp)
+          cat > "$ENTRY_FILE" <<HTML
 <div class="update-item">
-  <h2 class="version-title">Website Version VERSION_REPLACE</h2>
-  <p class="version-date">DATE_REPLACE</p>
-  <p>SUMMARY_REPLACE</p>
+  <h2 class="version-title">Website Version ${VERSION}</h2>
+  <p class="version-date">${TODAY}</p>
+  <ul class="update-list">
+$(cat "$LIST_FILE")
+  </ul>
 </div>
-EOF
-)
+HTML
 
-          NEW_ENTRY="${NEW_ENTRY//VERSION_REPLACE/$VERSION}"
-          NEW_ENTRY="${NEW_ENTRY//DATE_REPLACE/$TODAY}"
-          NEW_ENTRY="${NEW_ENTRY//SUMMARY_REPLACE/${{ steps.ai.outputs.summary }}}"
+          # Insert the block after the UPDATE_LOG_START marker
+          # Create a new file with the inserted entry
+          awk -v marker='<!-- UPDATE_LOG_START -->' -v insertfile="$ENTRY_FILE" '
+            $0 ~ marker {
+              print
+              while((getline line < insertfile) > 0) print line
+              close(insertfile)
+              next
+            }
+            { print }
+          ' ul.html > ul_new.html
 
-          sed -i "/<!-- UPDATE_LOG_START -->/a $NEW_ENTRY" ul.html
+          # Replace original file
+          mv ul_new.html ul.html
+          rm -f "$ENTRY_FILE" "$LIST_FILE"
 
-      - name: Commit and Push Update Log
+      - name: Commit & push updated ul.html
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
           git add ul.html
-          git commit -m "Auto-update log entry"
-          git push
+          git commit -m "Automated AI update log entry" || echo "No changes to commit"
+          git push || echo "Push failed"
