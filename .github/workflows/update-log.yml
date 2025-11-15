@@ -6,7 +6,6 @@ on:
       - main
   workflow_dispatch:
 
-# ADD THIS PERMISSIONS BLOCK
 permissions:
   contents: write
 
@@ -19,15 +18,14 @@ jobs:
       - name: 🚀 Checkout repository
         uses: actions/checkout@v4
         with:
-          # REMOVE the token line below - use the default GITHUB_TOKEN
-          # token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: 📝 Get recent commits context
         run: |
-          git log -3 --pretty=format:"%s" > recent_commits.txt
-          echo "Recent commits for AI context:"
-          cat recent_commits.txt
+          # Get the actual commit that triggered this workflow
+          echo "=== TRIGGERING COMMIT ==="
+          git log -1 --pretty=%B > commit_message.txt
+          cat commit_message.txt
 
       - name: 🤖 Generate AI update block (Gemini)
         env:
@@ -38,9 +36,10 @@ jobs:
           pip3 install requests
 
           python3 << 'EOF'
-          import requests, os, datetime, json, random
+          import requests, os, datetime, random
 
-          commit_text = open("recent_commits.txt").read().strip()
+          # Read the actual commit message that triggered this
+          commit_message = open("commit_message.txt").read().strip()
           today = datetime.date.today().strftime("%B %d, %Y")
           
           version_names = ["Quantum", "Phoenix", "Nebula", "Velocity", "Horizon", "Infinity", "Cosmic", "Synergy"]
@@ -52,10 +51,12 @@ jobs:
           api_key = os.environ["GEMINI_API_KEY"]
           url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
 
+          print(f"🎯 Using commit message: {commit_message}")
+
           prompt = f"""
-          Create an engaging HTML update card for a gaming website. Based on these git commits: {commit_text}
+          Create an engaging HTML update card for an unblocked games website based on this git commit: "{commit_message}"
           
-          Return ONLY this exact HTML structure, no other text:
+          Return ONLY the HTML code with no explanations. Use this exact structure:
 
           <div class="update-item" style="animation-delay: 0.1s;">
             <div class="update-header">
@@ -67,90 +68,64 @@ jobs:
             </div>
             <div class="update-content">
               <ul class="update-list">
-                <!-- Create 3-4 exciting bullet points about gaming updates -->
-                <!-- Use gaming emojis like 🎮, 🚀, 🎯, ✨, 🐛, 📱, 🕹️ -->
+                <li>✨ Create 3-4 specific bullet points based on the commit</li>
+                <li>🎮 Use gaming emojis and exciting language</li>
+                <li>🚀 Make it relevant to game website updates</li>
+                <li>🎯 Be specific about what changed</li>
               </ul>
             </div>
           </div>
           """
 
-          payload = {
-              "contents": [
-                  {"parts": [{"text": prompt}]}
-              ],
-              "generationConfig": {
-                  "temperature": 0.8,
-                  "topK": 40,
-                  "topP": 0.95,
-                  "maxOutputTokens": 500,
-              }
-          }
-
           try:
-              r = requests.post(url, json=payload, timeout=30)
-              r.raise_for_status()
+              payload = {
+                  "contents": [
+                      {"parts": [{"text": prompt}]}
+                  ],
+                  "generationConfig": {
+                      "temperature": 0.9,
+                      "topK": 40,
+                      "topP": 0.95,
+                      "maxOutputTokens": 500,
+                  }
+              }
+
+              response = requests.post(url, json=payload, timeout=30)
+              response.raise_for_status()
               
-              response_text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-              clean_html = response_text.strip()
-              clean_html = clean_html.replace('```html', '').replace('```', '').strip()
+              result = response.json()
+              ai_text = result["candidates"][0]["content"]["parts"][0]["text"]
               
-              if '<div class="update-item"' in clean_html and '<li>' in clean_html:
-                  open("new_update.html", "w").write(clean_html)
-                  print("✅ Successfully generated AI update card!")
-              else:
-                  raise Exception("AI response doesn't contain valid HTML structure")
+              # Clean the response
+              cleaned_text = ai_text.strip()
+              cleaned_text = cleaned_text.replace('```html', '').replace('```', '').strip()
+              
+              # Save the AI-generated content
+              with open("new_update.html", "w") as f:
+                  f.write(cleaned_text)
                   
+              print("✅ AI-generated content saved!")
+              print(cleaned_text)
+              
           except Exception as e:
-              print(f"❌ AI Generation failed: {e}")
-              fallback_html = f'''
-              <div class="update-item" style="animation-delay: 0.1s;">
-                <div class="update-header">
-                  <div class="version-info">
-                    <span class="version-badge">v{version_number}</span>
-                    <h3 class="version-title">{version_name}</h3>
-                  </div>
-                  <span class="version-date">{today}</span>
-                </div>
-                <div class="update-content">
-                  <ul class="update-list">
-                    <li>🎮 Automatic game updates and improvements</li>
-                    <li>🚀 Enhanced performance and loading times</li>
-                    <li>✨ Better gaming experience with latest fixes</li>
-                    <li>🎯 New features and gameplay enhancements</li>
-                  </ul>
-                </div>
-              </div>
-              '''
-              open("new_update.html", "w").write(fallback_html.strip())
+              print(f"❌ AI generation failed: {e}")
+              # FAIL THE WORKFLOW INSTEAD OF USING FALLBACK
+              raise Exception("AI generation failed - no fallback template used")
+
           EOF
 
       - name: 📋 Insert update into HTML
         run: |
           NEW_UPDATE=$(cat new_update.html)
-          awk -v update="$NEW_UPDATE" '
-            /<!-- UPDATE_LOG_START -->/ {
-                print "            <!-- UPDATE_LOG_START -->"
-                print "            " update
-                next
-            }
-            /<!-- UPDATE_LOG_END -->/ {
-                print "            <!-- UPDATE_LOG_END -->"
-                next
-            }
-            1
-          ' ul.html > ul_temp.html
+          echo "Inserting AI-generated update..."
           
-          mv ul_temp.html ul.html
-          echo "✅ Update successfully inserted!"
-
-      - name: 🔍 Verify the update was inserted
-        run: |
-          if grep -q "update-item" ul.html; then
-            echo "✅ Update card found in HTML - success!"
-          else
-            echo "❌ Error: Update card not found in HTML"
-            exit 1
-          fi
+          # Remove any existing updates between the markers
+          sed -i '/<!-- UPDATE_LOG_START -->/,/<!-- UPDATE_LOG_END -->/{//!d}' ul.html
+          
+          # Insert the new AI-generated update
+          sed -i '/<!-- UPDATE_LOG_START -->/a\'$'\n''            '"$NEW_UPDATE" ul.html
+          
+          echo "✅ AI update inserted!"
 
       - name: 📤 Commit and push changes
         run: |
@@ -159,8 +134,6 @@ jobs:
           git add ul.html
           git diff --staged --quiet || git commit -m "🤖 AI Auto Update: $(date +'%Y-%m-%d %H:%M')"
           git push
-        # REMOVE the GITHUB_TOKEN env line below
 
       - name: 🧹 Cleanup
-        if: always()
-        run: rm -f new_update.html recent_commits.txt
+        run: rm -f new_update.html commit_message.txt
