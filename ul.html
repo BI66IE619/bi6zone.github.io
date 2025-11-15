@@ -3,123 +3,107 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Update Log</title>
+    <title>BI6ZONE — Update Log</title>
 
     <style>
-        body {
+        @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap");
+
+        * {
             margin: 0;
-            background: linear-gradient(to right, #0f0f0f, #1a1a1a);
-            font-family: Arial, sans-serif;
-            color: white;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Poppins", sans-serif;
         }
 
-        .header {
-            text-align: center;
+        body {
+            background: #0d0d0f;
+            color: #fff;
+            overflow-x: hidden;
             padding: 40px 20px;
         }
 
-        h1 {
-            font-size: 2.8rem;
-            margin: 0;
-        }
-
-        .content {
-            padding: 30px;
+        .container {
             max-width: 900px;
-            margin: auto;
+            margin: 0 auto;
         }
 
-        .version-section {
-            margin-bottom: 40px;
+        h1 {
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 25px;
+            color: #fff;
+            font-weight: 600;
         }
 
         .section-title {
-            font-size: 2rem;
-            margin-bottom: 20px;
+            font-size: 1.4rem;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-weight: 600;
+            color: #a8a8ff;
+            text-align: left;
         }
 
         .update-item {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 10px;
-            padding: 20px;
+            background: rgba(255,255,255,0.08);
+            padding: 18px 22px;
+            border-radius: 12px;
             margin-bottom: 20px;
-            animation: fadeIn 0.4s ease forwards;
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(10px);
+            animation: fadeInUp 0.45s ease forwards;
             opacity: 0;
+            transform: translateY(20px);
+            animation-delay: calc(var(--delay) * 0.15s);
         }
 
-        .update-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .version-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .version-badge {
-            background: #ffc107;
-            color: black;
-            padding: 5px 12px;
+        .update-item .version {
+            display: inline-block;
+            background: #6c63ff;
+            padding: 3px 10px;
             border-radius: 6px;
-            font-weight: bold;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            font-weight: 600;
         }
 
-        .version-title {
-            margin: 0;
+        .update-item h3 {
+            font-size: 1.2rem;
+            margin-bottom: 4px;
+            color: #ffffff;
+            font-weight: 500;
         }
 
-        .version-date {
-            opacity: 0.7;
+        .update-item p {
+            font-size: 0.95rem;
+            line-height: 1.4rem;
+            color: #dcdcff;
         }
 
-        .update-list {
-            margin: 0;
-            padding-left: 20px;
-        }
-
-        @keyframes fadeIn {
+        @keyframes fadeInUp {
             to {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0px);
             }
         }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h1>Update Log</h1>
-    </div>
+    <div class="container">
+        <h1>BI6ZONE Update Log</h1>
 
-    <div class="content">
-        <div class="version-section">
+        <h2 class="section-title">Latest Updates</h2>
 
-            <!-- ==================================================== -->
-            <!-- AUTO-GENERATED UPDATES ONLY (Injected by GitHub Action) -->
-            <!-- UPDATE_LOG_START -->
-            <div class="update-item" style="animation-delay: 0.1s;">
-  <div class="update-header">
-    <div class="version-info">
-      <span class="version-badge">v1.5.8</span>
-      <h3 class="version-title">Secret Stash Refreshed</h3>
-    </div>
-    <span class="version-date">November 15, 2025</span>
-  </div>
-  <div class="update-content">
-    <ul class="update-list">
-      <li>🤫 Updated the `secret.html` file, potentially adding new hidden games or content for you to discover and enjoy! 🎮</li>
-    </ul>
-  </div>
-</div>
-            <!-- UPDATE_LOG_END -->
-            <!-- ==================================================== -->
-
+        <!-- AUTO-INSERTED UPDATES WILL BE ADDED DIRECTLY BELOW THIS COMMENT -->
+        
+        <!-- Example of the format Gemini will generate (these are placeholders you can delete if you want): -->
+        <div class="update-item" style="--delay: 1">
+            <span class="version">v1.0.0</span>
+            <h3>Initial Update Log Setup</h3>
+            <p>The update log system is now online. Future updates will be automatically added here.</p>
         </div>
+
     </div>
 
 </body>
