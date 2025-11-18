@@ -546,4 +546,23 @@ window.addEventListener('load', () => {
   loadChatHistoryForRoom(currentRoomName);
 });
 </script>
+  <script>
+  // ---- Rules Popup on Page Load ----
+  window.addEventListener("load", () => {
+    const rules = `
+⛔ BI6CORD CHAT RULES ⛔
+
+1. No spam.
+2. No NSFW.
+3. No racism, slurs, or harassment.
+4. No self-botting or flooding messages.
+5. Respect everyone in the chat.
+6. Keep things chill and friendly.
+
+By continuing, you agree to follow these rules.
+    `;
+
+    alert(rules);
+  });
+</script>
 
