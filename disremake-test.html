@@ -135,9 +135,9 @@
       <span>+</span>
     </div>
 
-    <div class="channel-item active">general</div>
-    <div class="channel-item">random</div>
-    <div class="channel-item">memes</div>
+    <div class="channel-item text-channel active">general</div>
+<div class="channel-item text-channel">random</div>
+<div class="channel-item text-channel">memes</div>
 
     <!-- MEMBER LIST (unchanged) -->
     <div class="channel-members">
@@ -147,24 +147,22 @@
       <div class="members-list"></div>
     </div>
 
-    <!-- VOICE CHANNELS -->
-    <div class="channel-category" style="margin-top: 20px;">
-      <span>Voice Channels</span>
-    </div>
+   <!-- VOICE CHANNELS -->
+<div class="channel-category" style="margin-top: 20px;">
+  <span>Voice Channels</span>
+</div>
 
-    <div class="channel-item" onclick="joinVoiceChannel('voice-lobby')">
-      🔊 voice-lobby
-    </div>
+<div class="channel-item voice-channel" onclick="joinVoiceChannel('voice-lobby')">
+  🔊 voice-lobby
+</div>
 
-    <div class="channel-item" onclick="joinVoiceChannel('gaming-vc')">
-      🎮 gaming-vc
-    </div>
+<div class="channel-item voice-channel" onclick="joinVoiceChannel('gaming-vc')">
+  🎮 gaming-vc
+</div>
 
-    <div class="channel-item" onclick="joinVoiceChannel('chill-vc')">
-      😎 chill-vc
-    </div>
-
-  </div>
+<div class="channel-item voice-channel" onclick="joinVoiceChannel('chill-vc')">
+  😎 chill-vc
+</div>
 
   <!-- USER INFO (unchanged) -->
   <div class="user-info">
@@ -605,7 +603,7 @@ function updateMembersDOM() {
 
 // ========== Channel switching UI ==========
 function wireChannelItems() {
-  const items = document.querySelectorAll('.channel-item');
+  const items = document.querySelectorAll('.channel-item.text-channel');
   items.forEach(it => {
     it.addEventListener('click', () => {
       if (it.classList.contains('active')) return;
@@ -629,97 +627,61 @@ window.addEventListener('load', () => {
   loadChatHistoryForRoom(currentRoomName);
 });
 </script>
-  <script>
-  // ---- Rules Popup on Page Load ----
-  window.addEventListener("load", () => {
-    const rules = `
-⛔ BI6CORD CHAT RULES ⛔
-
-1. No spam.
-2. No NSFW.
-3. No racism, slurs, or harassment.
-4. No self-botting or flooding messages.
-5. Respect everyone in the chat.
-6. Keep things chill and friendly.
-
-By continuing, you agree to follow these rules.
-    `;
-
-    alert(rules);
-  });
-</script>
 <script>
-// ===============================
-//    VOICE CHAT SYSTEM (WEBRTC)
-// ===============================
-
-// Change these to match your voice channels
 const VOICE_CHANNELS = ["voice-lobby", "gaming-vc", "chill-vc"];
 
 let currentVoiceRoom = null;
 let localStream = null;
-let peerConnections = {};            // Store all peers
-let voiceDrone = null;               // Scaledrone instance for voice
+let voiceDrone = null;
+let voiceRoom = null;
+let peerConnections = {};
 
-// Create Scaledrone for voice only
+// Start Scaledrone voice system
 function initVoiceSystem() {
-  voiceDrone = new ScaleDrone("scR7GZ7VfeoTZw5f");
+  voiceDrone = new ScaleDrone(CLIENT_ID, { data: currentUser });
 
-  voiceDrone.on('open', error => {
-    if (error) return console.error("Voice Drone error:", error);
+  voiceDrone.on("open", err => {
+    if (err) return console.error("Voice Scaledrone error:", err);
     console.log("Voice system connected");
   });
 }
 
-// User clicks the voice channel
-async function joinVoiceChannel(channelName) {
-  // Leave if already in this channel
-  if (currentVoiceRoom === channelName) {
-    leaveVoiceChannel();
-    return;
-  }
-
-  // Leave previous channel
+async function joinVoiceChannel(name) {
+  // Leave existing VC
   leaveVoiceChannel();
 
-  currentVoiceRoom = channelName;
-  console.log("Joining voice:", channelName);
+  currentVoiceRoom = name;
 
-  const room = voiceDrone.subscribe("voice-" + channelName);
-
-  // Get user's mic
+  // Get mic
   localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  console.log("Microphone captured");
 
-  room.on("open", err => {
-    if (err) console.error("VC room error:", err);
-  });
+  // Join observable room
+  voiceRoom = voiceDrone.subscribe(`observable-voice-${name}`);
 
-  // Getting list of members
-  room.on("members", members => {
-    members.forEach(member => {
-      if (member.id !== voiceDrone.clientId) {
-        createPeerConnection(member.id, true, room);
+  voiceRoom.on("members", members => {
+    members.forEach(m => {
+      if (m.id !== voiceDrone.clientId) {
+        makePeer(m.id, true);
       }
     });
   });
 
-  // A new peer joins
-  room.on("member_join", member => {
-    createPeerConnection(member.id, true, room);
+  voiceRoom.on("member_join", member => {
+    if (member.id !== voiceDrone.clientId) {
+      makePeer(member.id, true);
+    }
   });
 
-  // A peer leaves
-  room.on("member_leave", member => {
+  voiceRoom.on("member_leave", member => {
     if (peerConnections[member.id]) {
       peerConnections[member.id].close();
       delete peerConnections[member.id];
     }
   });
 
-  // Incoming signals
-  room.on("data", (msg, member) => {
-    if (!member) return;
+  voiceRoom.on("data", (msg, member) => {
+    if (!member || member.id === voiceDrone.clientId) return;
+
     const pc = peerConnections[member.id];
     if (!pc) return;
 
@@ -728,79 +690,56 @@ async function joinVoiceChannel(channelName) {
         if (msg.sdp.type === "offer") {
           pc.createAnswer().then(answer => {
             pc.setLocalDescription(answer).then(() => {
-              room.publish({
-                message: { sdp: pc.localDescription }
-              });
+              voiceRoom.publish({ message: { sdp: answer } });
             });
           });
         }
       });
-    }
-
-    if (msg.candidate) {
+    } else if (msg.candidate) {
       pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
     }
   });
 }
 
-// Create the WebRTC connection
-function createPeerConnection(memberId, isInitiator, room) {
+function makePeer(id, initiator) {
   const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" }
-    ]
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
   });
 
-  peerConnections[memberId] = pc;
+  peerConnections[id] = pc;
 
-  // Add our mic to the outgoing stream
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-  // Incoming audio from others
   pc.ontrack = event => {
     const audio = document.createElement("audio");
     audio.srcObject = event.streams[0];
     audio.autoplay = true;
   };
 
-  // ICE candidate exchange
   pc.onicecandidate = event => {
     if (event.candidate) {
-      room.publish({
-        message: { candidate: event.candidate }
-      });
+      voiceRoom.publish({ message: { candidate: event.candidate } });
     }
   };
 
-  // If we initiated, create offer
-  if (isInitiator) {
+  if (initiator) {
     pc.createOffer().then(offer => {
       pc.setLocalDescription(offer).then(() => {
-        room.publish({ message: { sdp: pc.localDescription } });
+        voiceRoom.publish({ message: { sdp: offer } });
       });
     });
   }
 }
 
-// Leave VC
 function leaveVoiceChannel() {
-  if (!currentVoiceRoom) return;
-
-  console.log("Leaving voice channel:", currentVoiceRoom);
-
-  // Stop mic
   if (localStream) {
     localStream.getTracks().forEach(t => t.stop());
     localStream = null;
   }
-
-  // Close peers
   Object.values(peerConnections).forEach(pc => pc.close());
   peerConnections = {};
-
   currentVoiceRoom = null;
 }
 
-// Init voice system on load
 window.addEventListener("load", initVoiceSystem);
 </script>
