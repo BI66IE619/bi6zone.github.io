@@ -464,6 +464,58 @@ function sendMessage() {
   drone.publish({ room: `observable-${currentRoomName}`, message: value });
 }
 
+// ================== AUTO-MUTE SYSTEM ==================
+const nWordRegex = /n[\W_]*i[\W_]*g[\W_]*g[\W_]*a?|n[\W_]*i[\W_]*g[\W_]*g[\W_]*e[\W_]*r?/gi;
+let messageTimestamps = [];
+const SPAM_LIMIT = 5;
+const SPAM_WINDOW = 10000; // 10 seconds
+const SPAM_MUTE_DURATION = 60000; // 1 minute
+const NWORD_MUTE_DURATION = 30000; // 30 seconds
+let mutedUntil = parseInt(localStorage.getItem('mutedUntil')) || 0;
+
+// Override sendMessage to include checks
+const originalSendMessage = sendMessage;
+sendMessage = function() {
+  const now = Date.now();
+
+  // Skip checks if admin
+  if (currentUser && currentUser.name === 'Owner/Jericho') {
+    originalSendMessage();
+    return;
+  }
+
+  // Check if muted
+  if (mutedUntil > now) {
+    alert(`You are muted for another ${Math.ceil((mutedUntil - now)/1000)} seconds.`);
+    return;
+  }
+
+  const value = DOM.input.value.trim();
+  if (!value) return;
+
+  // Check for n-word
+  if (nWordRegex.test(value)) {
+    mutedUntil = now + NWORD_MUTE_DURATION;
+    localStorage.setItem('mutedUntil', mutedUntil);
+    alert('You used a banned word and have been muted for 30 seconds.');
+    DOM.input.value = '';
+    return;
+  }
+
+  // Check spam
+  messageTimestamps.push(now);
+  messageTimestamps = messageTimestamps.filter(ts => now - ts <= SPAM_WINDOW);
+  if (messageTimestamps.length >= SPAM_LIMIT) {
+    mutedUntil = now + SPAM_MUTE_DURATION;
+    localStorage.setItem('mutedUntil', mutedUntil);
+    messageTimestamps = [];
+    alert('You are sending messages too quickly. You have been muted for 1 minute.');
+    return;
+  }
+
+  originalSendMessage();
+};
+
 // ========== Members DOM ==========
 function createMemberSidebarElement(member) {
   const name = member.clientData && member.clientData.name ? member.clientData.name : 'Unknown';
@@ -565,4 +617,3 @@ By continuing, you agree to follow these rules.
     alert(rules);
   });
 </script>
-
