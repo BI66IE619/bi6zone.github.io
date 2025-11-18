@@ -6,9 +6,7 @@
 <title>BI6CORD — Voice Only</title>
 <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
 <style>
-:root{
---bg:#36393F;--sidebar:#2c2d31;--serverbar:#1f1e23;--muted:#96989D;--accent:#5865F2;--card:#232428;--panel:#40444B;--text:#DCDDDE
-}
+:root{--bg:#36393F;--sidebar:#2c2d31;--serverbar:#1f1e23;--muted:#96989D;--accent:#5865F2;--card:#232428;--panel:#40444B;--text:#DCDDDE}
 *{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif}
 html,body{height:100%;background:var(--bg);color:var(--text)}
 .app{display:flex;height:100vh;width:100vw;overflow:hidden}
@@ -105,13 +103,13 @@ audio{width:1px;height:1px;position:absolute;left:-1000px}
 <div id="audioContainer"></div>
 
 <script>
-const CLIENT_ID="TnDePK63MJquB3ns"; // replace with your Scaledrone ID
+const CLIENT_ID="TnDePK63MJquB3ns"; 
 const PRESENCE_ROOM="observable-presence";
 const VOICE_ROOM_PREFIX="observable-voice-";
 const VOICE_CHANNELS=["voice-lobby","gaming-vc","chill-vc"];
 
 let drone,currentUser,presenceRoom,voiceRoom,localStream,pcs={},joinedChannel=null;
-let presenceMembers=new Map(); // id -> clientData
+let presenceMembers=new Map();
 let muted=false;
 
 const membersListEl=document.getElementById('membersList');
@@ -134,11 +132,12 @@ async function init(){
   myAvatarEl.textContent=shortIdFromName(currentUser.name);
   myAvatarEl.style.background=currentUser.color;
 
-  drone=new Scaledrone(CLIENT_ID,{data:currentUser});
+  drone=new ScaleDrone(CLIENT_ID,{data:currentUser});
   drone.on('open',err=>{
     if(err){myStatusEl.textContent='Error';return console.error(err);}
     myStatusEl.textContent='Online';
     vcStatus.textContent='Not connected';
+
     presenceRoom=drone.subscribe(PRESENCE_ROOM);
     presenceRoom.on('members',members=>{presenceMembers.clear();members.forEach(m=>presenceMembers.set(m.id,m.clientData||{}));renderMembers();});
     presenceRoom.on('member_join',m=>{presenceMembers.set(m.id,m.clientData||{});renderMembers();});
@@ -159,19 +158,25 @@ function renderMembers(){
     const el=document.createElement('div');
     el.className='member-item';
     el.innerHTML=`<div class="member-avatar" style="background:${color}">${(name||'U').charAt(0).toUpperCase()}</div>
-      <div style="flex:1">
-        <div class="member-name">${name}</div>
-        <div class="member-presence">Online</div>
-      </div>`;
+      <div style="flex:1"><div class="member-name">${name}</div><div class="member-presence">Online</div></div>`;
     membersListEl.appendChild(el);
   });
 }
 
-async function ensureLocalStream(){if(localStream)return localStream;localStream=await navigator.mediaDevices.getUserMedia({audio:true});return localStream;}
+async function ensureLocalStream(){
+  if(localStream)return localStream;
+  localStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  return localStream;
+}
 
 function createPeerConnection(peerId, roomName, initiator=false){
   if(pcs[peerId])return pcs[peerId];
-  const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  const pc=new RTCPeerConnection({
+    iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'turn:numb.viagenie.ca',credential:'muazkh',username:'webrtc@live.com'}
+    ]
+  });
   pcs[peerId]=pc;
   if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
   pc.ontrack=evt=>{
@@ -179,9 +184,12 @@ function createPeerConnection(peerId, roomName, initiator=false){
     let audio=document.getElementById('audio-'+peerId);
     if(!audio){audio=document.createElement('audio');audio.id='audio-'+peerId;audio.autoplay=true;audioContainer.appendChild(audio);}
     audio.srcObject=stream;
+    audio.play().catch(()=>console.warn('Autoplay blocked'));
   };
   pc.onicecandidate=ev=>{if(!ev.candidate)return;drone.publish({room:VOICE_ROOM_PREFIX+roomName,message:{type:'candidate',candidate:ev.candidate,from:drone.clientId}});}
-  if(initiator){pc.createOffer().then(o=>pc.setLocalDescription(o).then(()=>drone.publish({room:VOICE_ROOM_PREFIX+roomName,message:{type:'offer',sdp:pc.localDescription,from:drone.clientId}}))).catch(e=>console.warn(e));}
+  if(initiator){
+    pc.createOffer().then(o=>pc.setLocalDescription(o).then(()=>drone.publish({room:VOICE_ROOM_PREFIX+roomName,message:{type:'offer',sdp:pc.localDescription,from:drone.clientId}}))).catch(e=>console.warn(e));
+  }
   return pc;
 }
 
@@ -191,16 +199,21 @@ async function handleVoiceSignal(message, member, roomName){
   if(!fromId||fromId===drone.clientId) return;
   if(!pcs[fromId]) createPeerConnection(fromId,roomName,false);
   const pc=pcs[fromId];
-  if(message.type==='offer'&&message.sdp){await ensureLocalStream();if(localStream)localStream.getTracks().forEach(t=>{try{pc.addTrack(t,localStream);}catch(e){}});await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));const ans=await pc.createAnswer();await pc.setLocalDescription(ans);drone.publish({room:VOICE_ROOM_PREFIX+roomName,message:{type:'answer',sdp:pc.localDescription,from:drone.clientId}});}
-  else if(message.type==='answer'&&message.sdp){await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));}
+  if(message.type==='offer'&&message.sdp){
+    await ensureLocalStream();
+    if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+    await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
+    const ans=await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    drone.publish({room:VOICE_ROOM_PREFIX+roomName,message:{type:'answer',sdp:pc.localDescription,from:drone.clientId}});
+  } else if(message.type==='answer'&&message.sdp){await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));}
   else if(message.type==='candidate'&&message.candidate){await pc.addIceCandidate(new RTCIceCandidate(message.candidate));}
 }
 
 async function joinVoiceChannel(roomName){
   if(joinedChannel===roomName){leaveVoiceChannel();return;}
   leaveVoiceChannel();
-  if(!drone){alert('Signaling not ready');return;}
-  try{await ensureLocalStream();}catch(e){alert('Mic required');return;}
+  await ensureLocalStream();
   joinedChannel=roomName;
   headerTitle.textContent=roomName;
   vcStatus.textContent='Connecting...';
@@ -223,10 +236,9 @@ function leaveVoiceChannel(){
   document.querySelectorAll('.voice-channel').forEach(el=>el.classList.remove('active'));
 }
 
-function toggleJoinVoice(name){joinVoiceChannel(name).catch(e=>{console.error(e);alert('Failed: '+(e?.message||'Unknown'));});}
+function toggleJoinVoice(name){joinVoiceChannel(name).catch(e=>console.error(e));}
 function leaveVoiceIfJoined(){if(joinedChannel)leaveVoiceChannel();}
-function promptJoinLast(){if(!joinedChannel&&VOICE_CHANNELS.length)joinVoiceChannel(VOICE_CHANNELS[0]);else if(joinedChannel)leaveVoiceChannel();}
-function toggleMute(){if(!localStream) return;muted=!muted;localStream.getAudioTracks().forEach(t=>t.enabled=!muted);document.getElementById('muteBtn').textContent=muted?'Unmute':'Mute';}
+function toggleMute(){if(!localStream)return;muted=!muted;localStream.getAudioTracks().forEach(t=>t.enabled=!muted);document.getElementById('muteBtn').textContent=muted?'Unmute':'Mute';}
 
 window.addEventListener('load',()=>{init();});
 </script>
