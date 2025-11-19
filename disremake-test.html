@@ -1,596 +1,417 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>BI6CORD — Voice Only (Fixed Presence & VC)</title>
-
-<!-- Scaledrone SDK -->
-<script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
-
+<title>Single-file WebRTC Voice Room (Discord-like)</title>
+<!-- Minimal Discord-like styling -->
 <style>
   :root{
-    --bg:#36393F; --sidebar:#2c2d31; --serverbar:#1f1e23; --muted:#96989D;
-    --accent:#5865F2; --card:#232428; --panel:#40444B; --text:#DCDDDE;
+    --sidebar:#2f3136; --bg:#36393f; --panel:#2b2d31; --accent:#7289da; --muted:#b9bbbe; --text:#e3e5e8;
   }
-  *{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif}
-  html,body{height:100%;background:var(--bg);color:var(--text)}
-  .app{display:flex;height:100vh;width:100vw;overflow:hidden}
-
-  /* left server column */
-  .server-sidebar{width:72px;background:var(--serverbar);padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:8px}
-  .server-icon{width:48px;height:48px;border-radius:24px;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer}
-  .nav-icon{width:48px;height:48px;border-radius:24px;background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer}
-  .nav-icon img,.server-icon img{width:22px;height:22px;filter:invert(1)}
-
-  /* channel column */
-  .channel-sidebar{width:260px;background:var(--sidebar);display:flex;flex-direction:column}
-  .server-header{height:48px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #1e1f22;font-weight:600;cursor:pointer}
-  .channels-container{padding:12px 8px;overflow:auto;flex:1}
-  .channel-category{padding:8px 8px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;display:flex;justify-content:space-between;align-items:center}
-  .channel-item{padding:8px 10px;border-radius:6px;margin:6px 4px;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:8px}
-  .channel-item:hover{background:#35373C;color:var(--text)}
-  .channel-item.active{background:#404249;color:var(--text)}
-
-  /* main area */
-  .chat-area{flex:1;display:flex;flex-direction:column;background:var(--bg)}
-  .chat-header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #1e1f22}
-  .channel-title{font-weight:700;font-size:18px;display:flex;gap:10px;align-items:center}
-  .content{flex:1;padding:20px;overflow:auto}
-  .status-card{background:var(--card);padding:18px;border-radius:10px;border:1px solid #1e1f22;max-width:900px}
-
-  /* members */
-  .members-sidebar{width:320px;background:var(--sidebar);border-left:1px solid #1e1f22;display:flex;flex-direction:column}
-  .members-header{height:48px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #1e1f22;font-weight:600;color:var(--text)}
-  .members-content{padding:12px;overflow:auto;flex:1}
-  .member-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px}
-  .member-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;color:white}
-  .member-name{font-size:14px;font-weight:600;color:var(--text)}
-  .member-presence{font-size:12px;color:var(--muted)}
-
-  /* voice participants panel */
-  .voice-participants { margin-top:12px; padding-top:8px; border-top:1px dashed #2a2a2a; }
-  .voice-participants-title { font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em; }
-
-  /* controls & buttons */
-  .controls{display:flex;gap:8px;align-items:center}
-  .cta-btn{background:var(--accent);color:white;padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
-  .mutebtn{background:#2f3136;color:var(--text);padding:8px 12px;border-radius:8px;border:1px solid #1e1f22;cursor:pointer}
-
-  audio{display:none}
-  @media (max-width:1000px){.members-sidebar{display:none}}
+  html,body{height:100%;margin:0;font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue"; background:linear-gradient(180deg,var(--bg),#2f3136);color:var(--text);}
+  .app{display:grid;grid-template-columns:260px 1fr;height:100vh;gap:16px;padding:16px;}
+  .sidebar{background:var(--sidebar);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:12px;}
+  .server-title{font-weight:700;color:var(--text);padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.03);}
+  .channels{flex:1;overflow:auto;}
+  .channel{padding:10px;border-radius:8px;margin:6px 0;display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted);}
+  .channel.active{background:rgba(114,137,218,0.12);color:var(--text);font-weight:600;}
+  .main{display:flex;flex-direction:column;gap:12px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06));}
+  .room-header{display:flex;align-items:center;justify-content:space-between;}
+  .room-title{font-size:18px;font-weight:700;}
+  .controls{display:flex;gap:8px;align-items:center;}
+  button{background:var(--panel);border:1px solid rgba(255,255,255,0.03);color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer;}
+  .btn-muted{background:#2a2b2f;color:var(--muted);}
+  .participants{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px;}
+  .participant{background:var(--panel);padding:10px;border-radius:10px;display:flex;gap:10px;align-items:center;}
+  .avatar{width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#5b6bd1);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;}
+  .pmeta{flex:1;min-width:0;}
+  .pname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pstatus{font-size:12px;color:var(--muted);margin-top:4px;}
+  .small{font-size:13px;color:var(--muted);}
+  .controls .status-dot{width:10px;height:10px;border-radius:50%;background:#4caf50;margin-left:6px;display:inline-block;}
+  .footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid rgba(255,255,255,0.03);margin-top:8px;}
+  .mutebtn{background:#202225;border:1px solid rgba(0,0,0,0.3);color:var(--text);}
+  .leave{background:#2b2b2b;color:#ff8b8b;}
 </style>
 </head>
-
 <body>
 <div class="app">
-
-  <!-- SERVER SIDEBAR -->
-  <div class="server-sidebar">
-    <a class="server-icon" title="Home"><img src="https://img.icons8.com/ios-filled/50/ffffff/discord-logo.png" alt=""></a>
-    <div style="height:8px"></div>
-    <a class="nav-icon" title="Home"><img src="https://img.icons8.com/ios-filled/50/ffffff/home.png" alt=""></a>
-    <a class="nav-icon" title="Games"><img src="https://img.icons8.com/ios-filled/50/ffffff/controller.png" alt=""></a>
-  </div>
-
-  <!-- CHANNEL / VOICE SIDEBAR -->
-  <div class="channel-sidebar">
-    <div class="server-header">Unblockedcord</div>
-
-    <div class="channels-container">
-      <div class="channel-category"><span>Voice Channels</span></div>
-
-      <div class="channel-item voice-channel" vc="voice-lobby" onclick="toggleJoinVoice('voice-lobby')">
-        <span>🔊</span><span>voice-lobby</span>
-      </div>
-
-      <div class="channel-item voice-channel" vc="gaming-vc" onclick="toggleJoinVoice('gaming-vc')">
-        <span>🎮</span><span>gaming-vc</span>
-      </div>
-
-      <div class="channel-item voice-channel" vc="chill-vc" onclick="toggleJoinVoice('chill-vc')">
-        <span>😎</span><span>chill-vc</span>
-      </div>
-
-      <div style="height:12px"></div>
-      <div class="channel-category"><span>Presence</span></div>
-      <div style="padding:8px;color:var(--muted);font-size:13px;"><span id="presentCount">0</span> users online</div>
+  <aside class="sidebar">
+    <div class="server-title">My Voice Server</div>
+    <div class="channels">
+      <div class="channel active">🔊 general-voice</div>
+      <div class="channel">🎮 gaming</div>
+      <div class="channel">💬 lobby</div>
     </div>
+    <div style="font-size:13px;color:var(--muted);padding-top:8px;">Status: <span id="connStatus">disconnected</span></div>
+  </aside>
 
-    <!-- user mini card -->
-    <div style="padding:10px;border-top:1px solid #1e1f22;">
-      <div style="display:flex;gap:8px;align-items:center;">
-        <div id="myAvatar" class="member-avatar">U</div>
-        <div style="flex:1;">
-          <div id="myName" style="font-weight:700;color:var(--text);font-size:14px;">Connecting...</div>
-          <div id="myStatus" style="font-size:12px;color:var(--muted)">Offline</div>
-        </div>
-        <button id="leaveBtn" class="cta-btn" onclick="leaveVoiceIfJoined()" style="padding:6px 8px;">Leave</button>
+  <main class="main">
+    <div class="room-header">
+      <div>
+        <div class="room-title"># general-voice</div>
+        <div class="small">A simple WebRTC voice room. Up to 10 participants.</div>
       </div>
-    </div>
-  </div>
-
-  <!-- MAIN AREA -->
-  <div class="chat-area">
-    <div class="chat-header">
-      <div class="channel-title" id="headerTitle">No voice channel selected</div>
       <div class="controls">
-        <div id="vcStatus" style="color:var(--muted)">Not connected</div>
-        <button id="muteBtn" class="mutebtn" onclick="toggleMute()" title="Mute / Unmute">Mute</button>
+        <div id="micIndicator" class="small">Mic: <strong id="micState">off</strong></div>
+        <button id="joinBtn">Join</button>
+        <button id="leaveBtn" class="leave" style="display:none">Leave</button>
+        <button id="toggleMute" class="mutebtn" style="display:none">Mute</button>
       </div>
     </div>
 
-    <div class="content">
-      <div class="status-card" id="statusCard">
-        <h2 id="cardTitle">Welcome to Unblockedcord Voice</h2>
-        <p id="cardBody" style="margin-top:8px;color:var(--muted);line-height:1.45;">
-          Click a voice channel on the left to join. Your browser will ask for microphone permission.
-        </p>
-        <div style="margin-top:12px;">
-          <button class="cta-btn" onclick="promptJoinLast()">Join last channel</button>
-        </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-weight:700">Participants (<span id="memberCount">0</span>)</div>
+        <div class="small">Tap a participant to mute their audio locally</div>
       </div>
-    </div>
-  </div>
 
-  <!-- MEMBERS SIDEBAR -->
-  <div class="members-sidebar">
-    <div class="members-header">Members — <span id="membersCountHeader">0</span></div>
-    <div class="members-content" id="membersList"></div>
-
-    <!-- Voice participants panel under members -->
-    <div style="padding:12px;border-top:1px solid #1e1f22;">
-      <div class="voice-participants-title">Voice — <span id="vpTitle">—</span></div>
-      <div id="voiceParticipants"></div>
+      <div id="participants" class="participants" aria-live="polite"></div>
     </div>
-  </div>
+
+    <div class="footer">
+      <div class="small">Your name: <input id="displayName" placeholder="Pick a name" style="padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:#222;color:var(--text)"></div>
+      <div class="small">Room ID: <strong id="roomId">general-voice</strong></div>
+    </div>
+  </main>
 </div>
 
-<!-- Hidden audio container for remote streams -->
-<div id="audioContainer" style="display:none;"></div>
-
+<!-- ScaleDrone JS -->
+<script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
 <script>
-/* ======== Voice-only app (up to ~10 peers per channel) with FIXED PRESENCE ========
-   - Replace CLIENT_ID with your Scaledrone ID
-   - Serve over HTTPS (or localhost)
-   - Uses a single ScaleDrone instance for presence + signaling
-   - Proper cleanup on join/leave; maintains presence map for accurate member counts
-================================================================= */
+/*
+  Single-file WebRTC voice room using ScaleDrone signaling.
+  Replace CHANNEL_ID with your ScaleDrone channel ID (string).
+  ScaleDrone docs: https://www.scaledrone.com/ (create channel and copy its ID)
+*/
 
-const CLIENT_ID = "YstSSj9UMw4xqYdB"; // <<-- REPLACE
-const PRESENCE_ROOM = "observable-presence";
-const VOICE_ROOM_PREFIX = "observable-voice-";
-const VOICE_CHANNELS = ["voice-lobby","gaming-vc","chill-vc"];
-const MAX_PEERS = 10;
+// --------- CONFIG ----------
+const CHANNEL_ID = "YstSSj9UMw4xqYdB"; // <<--- REPLACE with your channel ID
+const ROOM_NAME = "observable-general-voice"; // room name for signaling (ScaleDrone 'observable-' prefix recommended)
 
-let drone = null;
-let currentUser = null;
-let presenceRoom = null;
-let voiceRoom = null;
+// limits
+const MAX_PARTICIPANTS = 10;
+
+// UI elements
+const joinBtn = document.getElementById('joinBtn');
+const leaveBtn = document.getElementById('leaveBtn');
+const toggleMuteBtn = document.getElementById('toggleMute');
+const micStateEl = document.getElementById('micState');
+const micIndicator = document.getElementById('micIndicator');
+const participantsEl = document.getElementById('participants');
+const memberCountEl = document.getElementById('memberCount');
+const connStatus = document.getElementById('connStatus');
+const displayNameInput = document.getElementById('displayName');
+
 let localStream = null;
-let pcs = {}; // peerId -> RTCPeerConnection
-let joinedChannel = null;
-let muted = false;
+let drone = null;
+let room = null;
+let clientId = null;
+let peers = {}; // map clientId -> { pc, audioEl, name }
+let isJoined = false;
+let isMuted = false;
 
-// presence tracking using Map (id -> clientData)
-let presenceMembers = new Map();
+// utility to create random short ID
+function shortId() { return Math.random().toString(36).substring(2,9); }
 
-// track voice room members per roomName (Map roomName -> Map(peerId -> clientData))
-let voiceRoomMembers = new Map();
-
-// UI refs
-const membersListEl = document.getElementById('membersList');
-const membersCountHeader = document.getElementById('membersCountHeader');
-const presentCountEl = document.getElementById('presentCount');
-const headerTitle = document.getElementById('headerTitle');
-const vcStatus = document.getElementById('vcStatus');
-const myNameEl = document.getElementById('myName');
-const myStatusEl = document.getElementById('myStatus');
-const myAvatarEl = document.getElementById('myAvatar');
-const audioContainer = document.getElementById('audioContainer');
-const voiceParticipantsEl = document.getElementById('voiceParticipants');
-const vpTitleEl = document.getElementById('vpTitle');
-const muteBtn = document.getElementById('muteBtn');
-
-function getRandomName(){
-  const adjs=["quiet","blue","brave","wild","lucky","shadow","crimson","silent","icy","bold"];
-  const nouns=["river","moon","breeze","pine","cloud","glade","star","ember","dawn","forest"];
-  return adjs[Math.floor(Math.random()*adjs.length)]+'_'+nouns[Math.floor(Math.random()*nouns.length)];
-}
-function getRandomColor(){
-  let c=Math.floor(Math.random()*0xFFFFFF).toString(16); while(c.length<6)c='0'+c; return '#'+c;
-}
-function shortIdFromName(name){ return (name||'U').slice(0,1).toUpperCase(); }
-
-// ---------- init ----------
-function init(){
-  currentUser = { name: getRandomName(), color: getRandomColor() };
-  myNameEl.textContent = currentUser.name;
-  myAvatarEl.textContent = shortIdFromName(currentUser.name);
-  myAvatarEl.style.background = currentUser.color;
-
-  if (CLIENT_ID === "YOUR_SCALEDONE_CHANNEL_ID") {
-    alert('Replace CLIENT_ID in HTML with your Scaledrone Channel ID before using voice.');
-  }
-
-  // connect to Scaledrone
-  drone = new ScaleDrone(CLIENT_ID, { data: currentUser });
-
-  drone.on('open', err => {
-    if (err) {
-      console.error('Scaledrone open error', err);
-      myStatusEl.textContent = 'Error connecting';
-      return;
-    }
-    myStatusEl.textContent = 'Online';
-    console.log('Scaledrone connected:', drone.clientId);
-
-    // setup presence room with robust local tracking
-    setupPresenceRoom();
-  });
-
-  drone.on('close', () => { myStatusEl.textContent = 'Disconnected'; console.log('Scaledrone closed'); });
-  drone.on('error', (err) => { myStatusEl.textContent = 'Error'; console.error('Scaledrone error', err); });
-}
-
-// ---------- PRESENCE (robust) ----------
-function setupPresenceRoom() {
-  try {
-    presenceRoom = drone.subscribe(PRESENCE_ROOM);
-  } catch (e) {
-    console.error('presence subscribe failed', e);
-    return;
-  }
-
-  presenceRoom.on('open', () => {
-    console.log('Presence room opened');
-  });
-
-  // initial snapshot
-  presenceRoom.on('members', (members) => {
-    presenceMembers.clear();
-    members.forEach(m => {
-      presenceMembers.set(m.id, m.clientData || {});
-    });
-    renderMembersList();
-  });
-
-  // track joins
-  presenceRoom.on('member_join', (m) => {
-    presenceMembers.set(m.id, m.clientData || {});
-    renderMembersList();
-  });
-
-  // track leaves
-  presenceRoom.on('member_leave', (m) => {
-    presenceMembers.delete(m.id);
-    renderMembersList();
-  });
-}
-
-function renderMembersList() {
-  membersListEl.innerHTML = '';
-  membersCountHeader.textContent = presenceMembers.size;
-  presentCountEl.textContent = presenceMembers.size;
-
-  presenceMembers.forEach((data, id) => {
-    const name = (data && data.name) || 'Unknown';
-    const color = (data && data.color) || '#5865F2';
-    const el = document.createElement('div');
-    el.className = 'member-item';
-    el.innerHTML = `
-      <div class="member-avatar" style="background:${color}">${(name||'U').charAt(0).toUpperCase()}</div>
-      <div style="flex:1">
-        <div class="member-name">${name}</div>
-        <div class="member-presence">Online</div>
+// Update participants UI
+function renderParticipants(){
+  participantsEl.innerHTML = '';
+  const ids = Object.keys(peers);
+  memberCountEl.textContent = ids.length + (isJoined ? 1 : 0);
+  // local tile first
+  if(isJoined){
+    const localTile = document.createElement('div');
+    localTile.className = 'participant';
+    localTile.innerHTML = `
+      <div class="avatar">You</div>
+      <div class="pmeta">
+        <div class="pname">${displayNameInput.value || 'You (local)'}</div>
+        <div class="pstatus">${isMuted ? 'muted' : 'speaking (mic on)'}</div>
+      </div>
+      <div>
+        <button id="localToggle" class="mutebtn">${isMuted ? 'Unmute' : 'Mute'}</button>
       </div>
     `;
-    membersListEl.appendChild(el);
-  });
-
-  // update voice participants UI if in channel
-  refreshVoiceParticipantsUI();
-}
-
-// ---------- voice helpers ----------
-function voiceRoomName(room) { return VOICE_ROOM_PREFIX + room; }
-
-async function ensureLocalStream() {
-  if (localStream) return localStream;
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    // apply muted state
-    localStream.getAudioTracks().forEach(t => t.enabled = !muted);
-    return localStream;
-  } catch (e) {
-    console.error('Mic access error', e);
-    throw e;
+    participantsEl.appendChild(localTile);
+    localTile.querySelector('#localToggle').onclick = toggleLocalMute;
   }
-}
 
-function cleanupPeer(peerId) {
-  try {
-    if (pcs[peerId]) {
-      pcs[peerId].close();
-      delete pcs[peerId];
-    }
-    const a = document.getElementById('audio-'+peerId);
-    if (a) a.remove();
-  } catch (e) { console.warn('cleanupPeer', e); }
-}
-
-function closeAllPeers() {
-  Object.keys(pcs).forEach(p => cleanupPeer(p));
-  pcs = {};
-}
-
-function createPeerConnection(peerId, roomName, initiator=false) {
-  if (pcs[peerId]) return pcs[peerId];
-  const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      // Add TURN server here if you have one for better reliability
-    ]
+  ids.slice(0, MAX_PARTICIPANTS).forEach(id=>{
+    const p = peers[id];
+    const tile = document.createElement('div');
+    tile.className = 'participant';
+    tile.dataset.client = id;
+    tile.innerHTML = `
+      <div class="avatar">${(p.name||'U').slice(0,2).toUpperCase()}</div>
+      <div class="pmeta">
+        <div class="pname">${p.name || ('User-'+id.slice(0,4))}</div>
+        <div class="pstatus" id="status-${id}">connected</div>
+      </div>
+      <div>
+        <button class="mutebtn" data-id="${id}">Mute</button>
+      </div>
+    `;
+    participantsEl.appendChild(tile);
+    // playback mute per participant
+    tile.querySelector('button').addEventListener('click', ()=>{
+      const audio = p.audioEl;
+      if(!audio) return;
+      audio.muted = !audio.muted;
+      tile.querySelector('button').textContent = audio.muted ? 'Unmute' : 'Mute';
+    });
   });
-  pcs[peerId] = pc;
+}
 
-  // add local audio if present
-  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+// Toggle local microphone on/off
+function toggleLocalMute(){
+  if(!localStream) return;
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  micStateEl.textContent = isMuted ? 'off' : 'on';
+  toggleMuteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
+  renderParticipants();
+}
 
-  // incoming track: create/attach audio
-  pc.ontrack = (evt) => {
-    const stream = evt.streams[0];
-    if (!stream) return;
-    let audio = document.getElementById('audio-'+peerId);
-    if (!audio) {
-      audio = document.createElement('audio');
-      audio.id = 'audio-'+peerId;
-      audio.autoplay = true;
-      audioContainer.appendChild(audio);
-    }
-    audio.srcObject = stream;
-  };
+// Create audio element for a remote stream and attach
+function createAudioElForStream(stream, id){
+  const audio = document.createElement('audio');
+  audio.autoplay = true;
+  audio.playsInline = true;
+  audio.srcObject = stream;
+  audio.id = 'audio-'+id;
+  audio.volume = 1.0;
+  // keep hidden but available
+  audio.style.display = 'none';
+  document.body.appendChild(audio);
+  return audio;
+}
 
-  // ICE -> publish to voice room
-  pc.onicecandidate = (ev) => {
-    if (!ev.candidate) return;
-    try {
-      drone.publish({ room: voiceRoomName(roomName), message: { type:'candidate', candidate: ev.candidate, from: drone.clientId } });
-    } catch (e) { console.warn('publish ice failed', e); }
-  };
+// Clean up peer
+function closePeer(id){
+  if(!peers[id]) return;
+  try{ peers[id].pc.close(); } catch(e){}
+  if(peers[id].audioEl){ peers[id].audioEl.remove(); }
+  delete peers[id];
+  renderParticipants();
+}
 
-  if (initiator) {
-    pc.createOffer().then(offer => {
-      return pc.setLocalDescription(offer).then(() => {
-        try {
-          drone.publish({ room: voiceRoomName(roomName), message: { type:'offer', sdp: pc.localDescription, from: drone.clientId } });
-        } catch (e) { console.warn('publish offer failed', e); }
+// Set connection status display
+function setConn(text){
+  connStatus.textContent = text;
+}
+
+// Start — connect to ScaleDrone and prepare local media
+async function joinRoom(){
+  if(!CHANNEL_ID || CHANNEL_ID === "YOUR_CHANNEL_ID"){
+    alert('Please replace CHANNEL_ID with your ScaleDrone channel ID in the code.');
+    return;
+  }
+  if(isJoined) return;
+  // create drone client
+  drone = new ScaleDrone(CHANNEL_ID, { data: { name: displayNameInput.value || ('Guest-'+shortId()) } });
+  setConn('connecting');
+  drone.on('open', error => {
+    if (error) { console.error(error); setConn('error'); return; }
+    setConn('connected to signaling');
+    clientId = drone.clientId;
+    // subscribe to room for signaling
+    room = drone.subscribe(ROOM_NAME);
+    room.on('open', err => {
+      if(err) console.error('room open error', err);
+    });
+
+    // members list: keep peers in sync
+    room.on('members', m => {
+      // members is an array of {id, clientData}
+      // Remove peers that are no longer present
+      const remoteIds = m.map(x => x.id).filter(id => id !== clientId);
+      Object.keys(peers).forEach(id => {
+        if(!remoteIds.includes(id)) closePeer(id);
       });
-    }).catch(e => console.warn('createOffer failed', e));
+      // show current members
+      renderParticipants();
+    });
+
+    // handle signaling messages
+    room.on('data', (message, member) => {
+      if(!member) return;
+      const from = member.id;
+      if(from === clientId) return; // ignore our own messages
+      if(typeof message !== 'object' || !message.type) return;
+
+      if(message.type === 'offer'){
+        // incoming offer -> create peer, set remote desc, create and send answer
+        const pc = preparePeerConnection(from, false);
+        pc.setRemoteDescription(new RTCSessionDescription(message.sdp)).then(()=>{
+          return pc.createAnswer();
+        }).then(answer=>{
+          return pc.setLocalDescription(answer);
+        }).then(()=>{
+          drone.publish({ room: ROOM_NAME, message: { type: 'answer', sdp: pc.localDescription, name: message.name }});
+        }).catch(console.error);
+
+      } else if(message.type === 'answer'){
+        // remote answer to our offer
+        const pcObj = peers[from];
+        if(pcObj && pcObj.pc){
+          pcObj.pc.setRemoteDescription(new RTCSessionDescription(message.sdp)).catch(console.error);
+        }
+
+      } else if(message.type === 'candidate'){
+        const pcObj = peers[from];
+        if(pcObj && pcObj.pc){
+          pcObj.pc.addIceCandidate(new RTCIceCandidate(message.candidate)).catch(console.error);
+        }
+      }
+    });
+
+    // now get user media
+    initLocalMediaAndOffer();
+  });
+
+  drone.on('close', ()=> setConn('signaling closed'));
+  drone.on('error', err => { console.error(err); setConn('signaling error'); });
+}
+
+// get microphone & make offers to other members
+async function initLocalMediaAndOffer(){
+  try{
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    isMuted = false;
+    micStateEl.textContent = 'on';
+    toggleMuteBtn.style.display = '';
+    leaveBtn.style.display = '';
+    joinBtn.style.display = 'none';
+    isJoined = true;
+    renderParticipants();
+
+    // after we are in a room, get current members and offer to each
+    const members = room.members || [];
+    // Offer to each existing remote member
+    members.forEach(member => {
+      if(member.id === clientId) return;
+      createOfferFor(member.id, member.clientData && member.clientData.name);
+    });
+
+    // Also listen for future joins (ScaleDrone triggers members list, but not 'member_join' event reliably)
+    room.on('member_join', member => {
+      // create offer to newly joined
+      if(member.id === clientId) return;
+      createOfferFor(member.id, member.clientData && member.clientData.name);
+    });
+
+  } catch(err){
+    console.error('getUserMedia error', err);
+    alert('Microphone access is required to join voice chat.');
+    setConn('mic blocked');
   }
+}
+
+// Prepare RTCPeerConnection and event handlers
+function preparePeerConnection(remoteId, isOfferer=true){
+  if(peers[remoteId] && peers[remoteId].pc) return peers[remoteId].pc;
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+  // create placeholder peer record
+  peers[remoteId] = peers[remoteId] || { pc, audioEl: null, name: '' };
+  peers[remoteId].pc = pc;
+
+  // add local tracks to PC
+  if(localStream){
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  }
+
+  // ICE candidate -> send to other via ScaleDrone
+  pc.onicecandidate = event => {
+    if(event.candidate){
+      drone.publish({ room: ROOM_NAME, message: { type: 'candidate', candidate: event.candidate }});
+    }
+  };
+
+  // remote track received
+  pc.ontrack = ev => {
+    // Some browsers deliver multiple tracks in one event; take the first stream
+    const stream = ev.streams && ev.streams[0] ? ev.streams[0] : new MediaStream(ev.track ? [ev.track] : []);
+    // create audio element for it
+    const audioEl = createAudioElForStream(stream, remoteId);
+    peers[remoteId].audioEl = audioEl;
+    // update name if known
+    peers[remoteId].name = peers[remoteId].name || ('User-' + remoteId.slice(0,4));
+    renderParticipants();
+  };
+
+  pc.onconnectionstatechange = () => {
+    if(pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed'){
+      closePeer(remoteId);
+    }
+  };
 
   return pc;
 }
 
-async function handleSignal(message, member, roomName) {
-  if (!message) return;
-  const fromId = message.from || (member && member.id);
-  if (!fromId || fromId === drone.clientId) return;
+// create offer for a specific remote id; send offer via ScaleDrone
+async function createOfferFor(remoteId, remoteName){
+  // prepare peer
+  const pc = preparePeerConnection(remoteId, true);
+  // attach remote name
+  peers[remoteId].name = remoteName || peers[remoteId].name || ('User-'+remoteId.slice(0,4));
 
-  // ensure pc exists
-  if (!pcs[fromId]) createPeerConnection(fromId, roomName, false);
-  const pc = pcs[fromId];
-  if (!pc) return;
-
-  if (message.type === 'offer' && message.sdp) {
-    try {
-      await ensureLocalStream();
-      // ensure tracks are attached
-      if (localStream) localStream.getTracks().forEach(t => {
-        try { pc.addTrack(t, localStream); } catch(e) {}
-      });
-      await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      drone.publish({ room: voiceRoomName(roomName), message: { type:'answer', sdp: pc.localDescription, from: drone.clientId } });
-    } catch (e) { console.error('handle offer failed', e); }
-  } else if (message.type === 'answer' && message.sdp) {
-    try {
-      await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
-    } catch (e) { console.error('setRemoteDescription(answer) failed', e); }
-  } else if (message.type === 'candidate' && message.candidate) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
-    } catch (e) { console.warn('addIceCandidate failed', e); }
-  }
+  try{
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    // send offer via signaling channel
+    drone.publish({ room: ROOM_NAME, message: { type: 'offer', sdp: pc.localDescription, name: displayNameInput.value || ('Guest-'+shortId()) }});
+  } catch(e){ console.error('Offer error', e); }
 }
 
-// join voice channel
-async function joinVoiceChannel(roomName) {
-  if (!drone) { alert('Signaling not ready'); return; }
-
-  if (joinedChannel === roomName) {
-    leaveVoiceChannel();
-    return;
-  }
-
-  // leave existing
-  leaveVoiceChannel();
-
-  // get mic
-  try {
-    await ensureLocalStream();
-  } catch (e) {
-    alert('Microphone permission is required to join voice.');
-    return;
-  }
-
-  joinedChannel = roomName;
-  headerTitle.textContent = roomName;
-  vcStatus.textContent = 'Connecting...';
-  vpTitleEl.textContent = roomName;
-
-  // subscribe to voice room
-  try {
-    voiceRoom = drone.subscribe(voiceRoomName(roomName));
-  } catch (e) {
-    console.error('subscribe voice room failed', e);
-    voiceRoom = null;
-  }
-
-  if (!voiceRoom) {
-    vcStatus.textContent = 'Error';
-    return;
-  }
-
-  // keep a Map of current voice room members
-  voiceRoomMembers.set(roomName, new Map());
-
-  voiceRoom.on('open', err => { if (err) console.error('voice room open', err); });
-
-  voiceRoom.on('members', (members) => {
-    const mmap = new Map();
-    members.forEach(m => {
-      mmap.set(m.id, m.clientData || {});
-      // create peer for each existing member (initiate)
-      if (m.id !== drone.clientId && Object.keys(pcs).length < (MAX_PEERS-1)) {
-        createPeerConnection(m.id, roomName, true);
-      }
-    });
-    voiceRoomMembers.set(roomName, mmap);
-    refreshVoiceParticipantsUI();
+// Leave room and cleanup
+function leaveRoom(){
+  // close peers
+  Object.keys(peers).forEach(id => {
+    try{ peers[id].pc.close(); } catch(e){}
+    if(peers[id].audioEl) peers[id].audioEl.remove();
   });
-
-  voiceRoom.on('member_join', (m) => {
-    if (m.id === drone.clientId) return;
-    // add to map
-    const mr = voiceRoomMembers.get(roomName) || new Map();
-    mr.set(m.id, m.clientData || {});
-    voiceRoomMembers.set(roomName, mr);
-    // create connection to the new member (offer)
-    if (!pcs[m.id]) createPeerConnection(m.id, roomName, true);
-    refreshVoiceParticipantsUI();
-  });
-
-  voiceRoom.on('member_leave', (m) => {
-    // remove from map and cleanup peer
-    const mr = voiceRoomMembers.get(roomName);
-    if (mr) { mr.delete(m.id); voiceRoomMembers.set(roomName, mr); }
-    cleanupPeer(m.id);
-    refreshVoiceParticipantsUI();
-  });
-
-  voiceRoom.on('data', (message, member) => {
-    handleSignal(message, member, roomName);
-  });
-
-  vcStatus.textContent = 'Connected';
-  // highlight active
-  document.querySelectorAll('.voice-channel').forEach(el=>el.classList.remove('active'));
-  const el = document.querySelector('.voice-channel[vc="'+roomName+'"]');
-  if (el) el.classList.add('active');
-
-  refreshVoiceParticipantsUI();
-}
-
-// leave voice
-function leaveVoiceChannel() {
-  if (voiceRoom) {
-    try { drone.unsubscribe(voiceRoomName(joinedChannel)); } catch(e) {}
-    voiceRoom = null;
-  }
-  // stop local stream
-  if (localStream) {
-    localStream.getTracks().forEach(t => { try { t.stop(); } catch(e){} });
+  peers = {};
+  // stop local media
+  if(localStream){
+    localStream.getTracks().forEach(t => t.stop());
     localStream = null;
   }
-  // close all peer connections and remove audio elements
-  closeAllPeers();
-  joinedChannel = null;
-  headerTitle.textContent = 'No voice channel selected';
-  vcStatus.textContent = 'Not connected';
-  vpTitleEl.textContent = '—';
-  // clear highlight
-  document.querySelectorAll('.voice-channel').forEach(el=>el.classList.remove('active'));
-  // clear participants
-  refreshVoiceParticipantsUI();
+
+  // unsubscribe/close drone
+  try{ if(room) room.unsubscribe(); } catch(e){}
+  try{ if(drone) drone.close(); } catch(e){}
+  drone = null;
+  room = null;
+  clientId = null;
+  isJoined = false;
+  isMuted = false;
+  micStateEl.textContent = 'off';
+  toggleMuteBtn.style.display = 'none';
+  leaveBtn.style.display = 'none';
+  joinBtn.style.display = '';
+  setConn('disconnected');
+  renderParticipants();
 }
 
-// toggle join called by UI
-function toggleJoinVoice(name) {
-  joinVoiceChannel(name).catch(e => {
-    console.error('joinVoiceChannel failed', e);
-    alert('Failed to join voice: '+(e && e.message?e.message:'Unknown'));
-  });
-}
-function leaveVoiceIfJoined(){ if (joinedChannel) leaveVoiceChannel(); }
-function promptJoinLast(){ if (!joinedChannel) joinVoiceChannel(VOICE_CHANNELS[0]); else leaveVoiceChannel(); }
-
-// mute/unmute
-function toggleMute() {
-  muted = !muted;
-  if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = !muted);
-  muteBtn.textContent = muted ? 'Unmute' : 'Mute';
-  muteBtn.style.background = muted ? '#444' : '';
-}
-
-// ---------- Voice participants UI ----------
-function refreshVoiceParticipantsUI() {
-  voiceParticipantsEl.innerHTML = '';
-  if (!joinedChannel) {
-    voiceParticipantsEl.innerHTML = '<div style="color:var(--muted)">Not in a voice channel</div>';
-    return;
+// Button wiring
+joinBtn.onclick = () => {
+  joinRoom();
+  // show hint: require HTTPS/localhost
+  if(location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
+    console.warn('WebRTC requires HTTPS to access microphone — run on localhost or via HTTPS.');
   }
+};
+leaveBtn.onclick = leaveRoom;
+toggleMuteBtn.onclick = toggleLocalMute;
 
-  // prefer the exact voiceRoomMembers map if present
-  const mr = voiceRoomMembers.get(joinedChannel);
-  if (mr && mr.size > 0) {
-    renderVoiceParticipants(Array.from(mr.values()).map((cd, idx)=>({ clientData: cd, id: Array.from(mr.keys())[idx] })));
-    return;
-  }
+// initial UI render
+renderParticipants();
+setConn('idle');
 
-  // fallback: show presence members (best-effort)
-  const fallback = [];
-  presenceMembers.forEach((data, id) => {
-    fallback.push({ id, clientData: data });
-  });
-  if (fallback.length > 0) {
-    renderVoiceParticipants(fallback.slice(0, MAX_PEERS));
-    return;
-  }
-
-  voiceParticipantsEl.innerHTML = '<div style="color:var(--muted)">No participants</div>';
-}
-
-function renderVoiceParticipants(list) {
-  voiceParticipantsEl.innerHTML = '';
-  if (!list || list.length === 0) {
-    voiceParticipantsEl.innerHTML = '<div style="color:var(--muted)">No participants</div>';
-    return;
-  }
-  list.forEach(item => {
-    const data = item.clientData || {};
-    const name = data.name || 'Unknown';
-    const color = data.color || '#5865F2';
-    const wrap = document.createElement('div');
-    wrap.className = 'member-item';
-    wrap.innerHTML = `
-      <div class="member-avatar" style="background:${color}">${(name||'U').charAt(0).toUpperCase()}</div>
-      <div style="flex:1">
-        <div class="member-name">${name}</div>
-        <div class="member-presence">In ${joinedChannel}</div>
-      </div>
-    `;
-    voiceParticipantsEl.appendChild(wrap);
-  });
-}
-
-// ---------- init on load ----------
-window.addEventListener('load', () => {
-  try { init(); } catch (e) { console.error('init error', e); }
-  // attach mute default text
-  muteBtn.textContent = 'Mute';
-});
 </script>
 </body>
 </html>
