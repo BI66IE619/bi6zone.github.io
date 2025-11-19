@@ -76,7 +76,7 @@ button{background:var(--panel);border:1px solid rgba(255,255,255,0.03);color:var
 
 <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
 <script>
-const CHANNEL_ID="YstSSj9UMw4xqYdB"; // Replace with your ScaleDrone ID
+const CHANNEL_ID="YOUR_CHANNEL_ID"; // Replace with your ScaleDrone ID
 const joinBtn=document.getElementById('joinBtn');
 const leaveBtn=document.getElementById('leaveBtn');
 const toggleMuteBtn=document.getElementById('toggleMute');
@@ -124,7 +124,7 @@ function renderParticipants(){
 
 // Connect observer to a channel
 function connectObserver(channel){
-  if(observers[channel]) return; // already connected
+  if(observers[channel]) return;
   if(!drone) drone = new ScaleDrone(CHANNEL_ID,{data:{name:displayNameInput.value||('Guest-'+shortId())}});
   drone.on('open', ()=>{ clientId=drone.clientId; setConn('connected'); });
 
@@ -138,6 +138,23 @@ function connectObserver(channel){
     }));
     if(channel===currentRoom) renderParticipants();
   });
+
+  // Join/Leave message handling
+  observer.on('data', (message, member)=>{
+    if(!message || !member) return;
+    const members = membersMap[channel]||[];
+    if(message.type==='joined'){
+      const idx = members.findIndex(m=>m.id===message.id);
+      if(idx>=0) members[idx].joined = true;
+      else members.push({id:message.id,name:member.clientData?.name||'User-'+message.id.slice(0,4),joined:true,muted:false});
+      renderParticipants();
+    } else if(message.type==='left'){
+      const idx = members.findIndex(m=>m.id===message.id);
+      if(idx>=0) members[idx].joined = false;
+      renderParticipants();
+    }
+  });
+
   observer.on('member_join', m=>{
     if(!membersMap[channel]) membersMap[channel]=[];
     membersMap[channel].push({id:m.id,name:m.clientData?.name||'User-'+m.id.slice(0,4),joined:false,muted:false});
@@ -148,10 +165,11 @@ function connectObserver(channel){
     membersMap[channel] = membersMap[channel].filter(x=>x.id!==m.id);
     if(channel===currentRoom) renderParticipants();
   });
+
   observers[channel]=observer;
 }
 
-// Join voice (local)
+// Join voice
 async function joinRoom(){
   if(isJoined) return;
   try{
@@ -163,10 +181,13 @@ async function joinRoom(){
     const idx = members.findIndex(m=>m.id===clientId);
     if(idx>=0){ members[idx].joined=true; members[idx].muted=false; }
     else members.push({id:clientId,name:displayNameInput.value||'You',joined:true,muted:false});
+    // broadcast joined
+    drone.publish({room:'observable-'+currentRoom,message:{type:'joined',id:clientId}});
     renderParticipants();
   }catch(e){ alert('Mic access required'); console.error(e); setConn('mic blocked'); }
 }
 
+// Leave voice
 function leaveRoom(){
   if(localStream) localStream.getTracks().forEach(t=>t.stop());
   localStream=null; isJoined=false; isMuted=false;
@@ -174,6 +195,7 @@ function leaveRoom(){
   const members = membersMap[currentRoom]||[];
   const me = members.find(m=>m.id===clientId);
   if(me) me.joined=false;
+  drone.publish({room:'observable-'+currentRoom,message:{type:'left',id:clientId}});
   renderParticipants();
 }
 
@@ -182,6 +204,9 @@ function toggleMute(){
   isMuted=!isMuted;
   localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
   micStateEl.textContent=isMuted?'off':'on';
+  const members = membersMap[currentRoom]||[];
+  const me = members.find(m=>m.id===clientId);
+  if(me) me.muted=isMuted;
   renderParticipants();
 }
 
@@ -199,17 +224,16 @@ channelList.querySelectorAll('.channel').forEach(ch=>{
   };
 });
 
-// Initial observer connections
+// Initial observers
 ['general','gaming','lobby','music'].forEach(connectObserver);
 
-// Button handlers
+// Buttons
 joinBtn.onclick=joinRoom;
 leaveBtn.onclick=leaveRoom;
 toggleMuteBtn.onclick=toggleMute;
 
-// Optional: refresh UI every 2 sec (catch minor updates)
+// Optional: refresh UI every 2 sec
 setInterval(renderParticipants,2000);
-
 </script>
 </body>
 </html>
