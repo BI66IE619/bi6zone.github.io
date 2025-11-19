@@ -189,7 +189,7 @@
 ***************************************************************************/
 
 // ========== CONFIG ==========
-const CLIENT_ID = '';
+const CLIENT_ID = 'scR7GZ7VfeoTZw5f';
 const OWNER_AREA = { right: 2, bottom: 2, width: 8, height: 8 };
 const OWNER_REQUIRED_CLICKS = 20;
 const OWNER_STORAGE_KEY = 'jerichoOwnerUnlocked';
@@ -468,56 +468,94 @@ function sendMessage() {
   drone.publish({ room: `observable-${currentRoomName}`, message: value });
 }
 
-// ================== AUTO-MUTE SYSTEM ==================
-const nWordRegex = /n[\W_]*i[\W_]*g[\W_]*g[\W_]*a?|n[\W_]*i[\W_]*g[\W_]*g[\W_]*e[\W_]*r?/gi;
-let messageTimestamps = [];
-const SPAM_LIMIT = 5;
-const SPAM_WINDOW = 10000; // 10 seconds
-const SPAM_MUTE_DURATION = 60000; // 1 minute
-const NWORD_MUTE_DURATION = 30000; // 30 seconds
-let mutedUntil = parseInt(localStorage.getItem('mutedUntil')) || 0;
+// ================= FULL ULTRA-WORD FILTER + AUTO-MUTE =================
 
-// Override sendMessage to include checks
-const originalSendMessage = sendMessage;
-sendMessage = function() {
+// This function allows detection like "f.u.c.k", "f u c k", "f*ck".
+const ob = w => w.split("").join("[\\W_]*");
+
+// Mild profanity → censored (****) but still sends
+const SOFT_WORDS = [
+  "fuck","shit","bitch","ass","bastard","hell","damn","crap","piss","dumb","stupid",
+  "hoe","slut","skank","dick","pussy","cock","balls","wank","jerk"
+];
+
+// NSFW, slurs, hate speech, self-harm, gore → BLOCK + AUTO MUTE
+const HARD_WORDS = [
+  // slurs (racial, homophobic, etc.)
+  "nigger","nigga","kike","chink","spic","beaner","wetback","fag","faggot","dyke",
+  "tranny","retard","autist","gook","sandnigger",
+
+  // nsfw / sexual explicit
+  "porn","sex","hentai","anal","dildo","cum","semen","nudes","deepthroat","69",
+  "bbw","milf","bdsm","fetish","orgasm","blowjob","handjob","jerkoff",
+
+  // gore / self harm / violence
+  "killmyself","kms","suicide","selfharm","kys","cutting","murder","bloodbath",
+
+  // drugs
+  "cocaine","heroin","meth","weed","lsd","molly","ecstasy","shrooms"
+];
+
+// Build regex patterns that match obfuscation
+const softRegex = new RegExp(SOFT_WORDS.map(ob).join("|"), "gi");
+const hardRegex = new RegExp(HARD_WORDS.map(ob).join("|"), "gi");
+
+// Spam control
+let msgTimes = [];
+const SPAM_MAX = 6;
+const SPAM_TIME = 7000;
+const MUTE_SPAM = 60000;
+const MUTE_HARD = 60000;
+
+let mutedUntil = parseInt(localStorage.getItem("mutedUntil")) || 0;
+
+const SEND_ORIG = sendMessage;
+
+sendMessage = function () {
   const now = Date.now();
 
-  // Skip checks if admin
-  if (currentUser && currentUser.name === 'Owner/Jericho') {
-    originalSendMessage();
+  // Owner bypass
+  if (currentUser?.name === "Owner/Jericho") {
+    SEND_ORIG();
     return;
   }
 
-  // Check if muted
+  // Muted check
   if (mutedUntil > now) {
-    alert(`You are muted for another ${Math.ceil((mutedUntil - now)/1000)} seconds.`);
+    alert(`❌ Still muted for ${Math.ceil((mutedUntil - now) / 1000)} sec.`);
     return;
   }
 
-  const value = DOM.input.value.trim();
-  if (!value) return;
+  let text = DOM.input.value.trim();
+  if (!text) return;
 
-  // Check for n-word
-  if (nWordRegex.test(value)) {
-    mutedUntil = now + NWORD_MUTE_DURATION;
-    localStorage.setItem('mutedUntil', mutedUntil);
-    alert('You used a banned word and have been muted for 30 seconds.');
-    DOM.input.value = '';
+  // HARD FILTER → block message + 1 min mute
+  if (hardRegex.test(text.toLowerCase())) {
+    mutedUntil = now + MUTE_HARD;
+    localStorage.setItem("mutedUntil", mutedUntil);
+    alert("❌ Message blocked. NSFW, slurs or harmful content detected. Muted for 1 minute.");
+    DOM.input.value = "";
     return;
   }
 
-  // Check spam
-  messageTimestamps.push(now);
-  messageTimestamps = messageTimestamps.filter(ts => now - ts <= SPAM_WINDOW);
-  if (messageTimestamps.length >= SPAM_LIMIT) {
-    mutedUntil = now + SPAM_MUTE_DURATION;
-    localStorage.setItem('mutedUntil', mutedUntil);
-    messageTimestamps = [];
-    alert('You are sending messages too quickly. You have been muted for 1 minute.');
+  // SOFT FILTER → censor ****
+  if (softRegex.test(text.toLowerCase())) {
+    text = text.replace(softRegex, "****");
+  }
+
+  // Spam detection
+  msgTimes.push(now);
+  msgTimes = msgTimes.filter(t => now - t < SPAM_TIME);
+
+  if (msgTimes.length >= SPAM_MAX) {
+    mutedUntil = now + MUTE_SPAM;
+    localStorage.setItem("mutedUntil", mutedUntil);
+    alert("❌ Muted for spamming (1 minute).");
     return;
   }
 
-  originalSendMessage();
+  DOM.input.value = text;
+  SEND_ORIG();
 };
 
 // ========== Members DOM ==========
@@ -626,4 +664,3 @@ By continuing, you agree to follow these rules.
       alert("Im am also hella happy to announce that voice chat is officially up and running. Check it out by clicking '# Voice Chat' in the channels sidebar. Please keep it chill as i want us humans to be able to have nice things. -Jericho");
     };
 </script>
-
