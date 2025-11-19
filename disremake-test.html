@@ -1,149 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Guaranteed Working WebRTC Voice</title>
-<script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
-<style>
-body { background:#222; color:white; font-family:sans-serif; padding:20px; }
-button { padding:10px 15px; border:none; border-radius:5px; background:#5865F2; color:white; cursor:pointer; }
-</style>
+    <meta charset="UTF-8">
+    <title>Simple Voice Chat</title>
 </head>
 <body>
+    <h2>WebRTC Voice Chat</h2>
 
-<h2>Stable WebRTC Voice Test</h2>
+    <audio id="remoteAudio" autoplay></audio>
 
-<button id="startBtn">Start Voice</button>
-<button id="muteBtn" disabled>Mute</button>
+    <script>
+        const ROOM_NAME = "voice-room";
+        const drone = new ScaleDrone("YstSSj9UMw4xqYdB");
+        let room;
+        let pc;
 
-<p id="status">Idle</p>
+        drone.on('open', () => {
+            room = drone.subscribe(ROOM_NAME);
+            room.on('open', () => console.log("Connected to room"));
 
-<div id="audioZone"></div>
+            room.on('data', (message, client) => {
+                if (client.id === drone.clientId) return;
+                handleSignal(message);
+            });
 
-<script>
-const CHANNEL_ID = "YstSSj9UMw4xqYdB";
-const ROOM_NAME  = "stable-webrtc-room";
+            startWebRTC();
+        });
 
-let drone, room;
-let pc;
-let localStream;
-let makingOffer = false;
-let ignoreOffer = false;
-let polite = false;
-let muted = false;
+        async function startWebRTC() {
+            pc = new RTCPeerConnection();
 
-// ------------ START ------------
-document.getElementById("startBtn").onclick = async () => {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-    } catch (e) {
-        alert("Mic blocked");
-        return;
-    }
+            // Send ICE candidates
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    sendSignal({ candidate: event.candidate });
+                }
+            };
 
-    initSignaling();
-};
+            // Receive audio
+            pc.ontrack = event => {
+                document.getElementById("remoteAudio").srcObject = event.streams[0];
+            };
 
-// ------------ SIGNALING ------------
-function initSignaling() {
-    drone = new ScaleDrone(CHANNEL_ID);
+            // Get microphone
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-    drone.on("open", err => {
-        if (err) return console.error(err);
-        joinRoom();
-    });
-}
-
-function joinRoom() {
-    room = drone.subscribe(ROOM_NAME);
-
-    room.on("members", members => {
-        polite = members.length === 2;
-        createPeer();
-    });
-
-    room.on("data", (msg, member) => {
-        if (!member) return;
-        if (member.id === drone.clientId) return;
-        handleSignal(msg);
-    });
-}
-
-// ------------ PEER SETUP ------------
-function createPeer() {
-    pc = new RTCPeerConnection({
-        iceServers:[
-            {urls:'stun:stun.l.google.com:19302'},
-            {urls:'turn:numb.viagenie.ca', username:'webrtc@live.com', credential:'muazkh'}
-        ]
-    });
-
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-    pc.ontrack = e => {
-        const audio = document.createElement("audio");
-        audio.autoplay = true;
-        audio.srcObject = e.streams[0];
-        document.getElementById("audioZone").appendChild(audio);
-    };
-
-    pc.onicecandidate = e => {
-        if (e.candidate) sendSignal({candidate:e.candidate});
-    };
-
-    pc.onnegotiationneeded = async () => {
-        try {
-            makingOffer = true;
-            await pc.setLocalDescription(await pc.createOffer());
-            sendSignal({description:pc.localDescription});
-        } finally {
-            makingOffer = false;
+            // If first user → create offer
+            room.on("members", members => {
+                const isOfferer = members.length === 2;
+                if (isOfferer) createOffer();
+            });
         }
-    };
 
-    document.getElementById("muteBtn").disabled = false;
-    document.getElementById("status").textContent = "Ready";
-}
+        async function createOffer() {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            sendSignal({ offer });
+        }
 
-// ------------ SIGNAL HANDLING ------------
-async function handleSignal(msg) {
-    const {description, candidate} = msg;
-
-    try {
-        if (description) {
-            const offerCollision =
-                description.type === "offer" &&
-                (makingOffer || pc.signalingState !== "stable");
-
-            ignoreOffer = !polite && offerCollision;
-            if (ignoreOffer) return;
-
-            await pc.setRemoteDescription(description);
-
-            if (description.type === "offer") {
-                await pc.setLocalDescription(await pc.createAnswer());
-                sendSignal({description:pc.localDescription});
+        async function handleSignal(msg) {
+            if (msg.offer) {
+                await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                sendSignal({ answer });
             }
-        } else if (candidate) {
-            if (!ignoreOffer)
-                await pc.addIceCandidate(candidate);
+
+            if (msg.answer) {
+                await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+            }
+
+            if (msg.candidate) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+                } catch (e) {
+                    console.error("ICE error:", e);
+                }
+            }
         }
-    } catch (e) {
-        console.error("Signal error:", e);
-    }
-}
 
-function sendSignal(msg) {
-    drone.publish({room:ROOM_NAME, message:msg});
-}
+        function sendSignal(data) {
+            drone.publish({
+                room: ROOM_NAME,
+                message: data
+            });
+        }
+    </script>
 
-// ------------ MUTE ------------
-document.getElementById("muteBtn").onclick = () => {
-    muted = !muted;
-    localStream.getAudioTracks()[0].enabled = !muted;
-    document.getElementById("muteBtn").textContent = muted ? "Unmute" : "Mute";
-};
-</script>
-
+    <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
 </body>
 </html>
