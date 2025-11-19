@@ -20,8 +20,7 @@ html,body{height:100%;margin:0;font-family:Inter,sans-serif;background:var(--bg)
 .room-title{font-size:18px;font-weight:700;}
 .controls{display:flex;gap:8px;align-items:center;}
 button{background:var(--panel);border:1px solid rgba(255,255,255,0.03);color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer;}
-.mutebtn{background:#202225;border:1px solid rgba(0,0,0,0.3);color:var(--text);}
-.leave{background:#2b2b2b;color:#ff8b8b;}
+.btn-muted{background:#2a2b2f;color:var(--muted);}
 .participants{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px;}
 .participant{background:var(--panel);padding:10px;border-radius:10px;display:flex;gap:10px;align-items:center;}
 .avatar{width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#5b6bd1);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;}
@@ -30,52 +29,54 @@ button{background:var(--panel);border:1px solid rgba(255,255,255,0.03);color:var
 .pstatus{font-size:12px;color:var(--muted);margin-top:4px;}
 .small{font-size:13px;color:var(--muted);}
 .footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid rgba(255,255,255,0.03);margin-top:8px;}
+.mutebtn{background:#202225;border:1px solid rgba(0,0,0,0.3);color:var(--text);}
+.leave{background:#2b2b2b;color:#ff8b8b;}
 </style>
 </head>
 <body>
 <div class="app">
-<aside class="sidebar">
-  <div class="server-title">My Voice Server</div>
-  <div class="channels" id="channelList">
-    <div class="channel active" data-room="general">🔊 general</div>
-    <div class="channel" data-room="gaming">🎮 gaming</div>
-    <div class="channel" data-room="lobby">💬 lobby</div>
-    <div class="channel" data-room="music">🎵 music</div>
-  </div>
-  <div style="font-size:13px;color:var(--muted);padding-top:8px;">Status: <span id="connStatus">disconnected</span></div>
-</aside>
+  <aside class="sidebar">
+    <div class="server-title">My Voice Server</div>
+    <div class="channels" id="channelList">
+      <div class="channel active" data-room="general">🔊 general</div>
+      <div class="channel" data-room="gaming">🎮 gaming</div>
+      <div class="channel" data-room="lobby">💬 lobby</div>
+      <div class="channel" data-room="music">🎵 music</div>
+    </div>
+    <div style="font-size:13px;color:var(--muted);padding-top:8px;">Status: <span id="connStatus">disconnected</span></div>
+  </aside>
 
-<main class="main">
-  <div class="room-header">
+  <main class="main">
+    <div class="room-header">
+      <div>
+        <div class="room-title" id="roomTitle"># general</div>
+        <div class="small">A simple WebRTC voice room.</div>
+      </div>
+      <div class="controls">
+        <div class="small">Mic: <strong id="micState">off</strong></div>
+        <button id="joinBtn">Join</button>
+        <button id="leaveBtn" class="leave" style="display:none">Leave</button>
+        <button id="toggleMute" class="mutebtn" style="display:none">Mute</button>
+      </div>
+    </div>
+
     <div>
-      <div class="room-title" id="roomTitle"># general</div>
-      <div class="small">A simple WebRTC voice room.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-weight:700">Participants (<span id="memberCount">0</span>)</div>
+      </div>
+      <div id="participants" class="participants" aria-live="polite"></div>
     </div>
-    <div class="controls">
-      <div class="small">Mic: <strong id="micState">off</strong></div>
-      <button id="joinBtn">Join</button>
-      <button id="leaveBtn" class="leave" style="display:none">Leave</button>
-      <button id="toggleMute" class="mutebtn" style="display:none">Mute</button>
-    </div>
-  </div>
 
-  <div>
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-weight:700">Participants (<span id="memberCount">0</span>)</div>
+    <div class="footer">
+      <div class="small">Your name: <input id="displayName" placeholder="Pick a name" style="padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:#222;color:var(--text)"></div>
+      <div class="small">Room ID: <strong id="roomId">general</strong></div>
     </div>
-    <div id="participants" class="participants" aria-live="polite"></div>
-  </div>
-
-  <div class="footer">
-    <div class="small">Your name: <input id="displayName" placeholder="Pick a name" style="padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:#222;color:var(--text)"></div>
-    <div class="small">Room ID: <strong id="roomId">general</strong></div>
-  </div>
-</main>
+  </main>
 </div>
 
 <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
 <script>
-const CHANNEL_ID="YstSSj9UMw4xqYdB"; // Replace with your ScaleDrone ID
+const CHANNEL_ID="YOUR_CHANNEL_ID"; // Replace with your ScaleDrone ID
 const joinBtn=document.getElementById('joinBtn');
 const leaveBtn=document.getElementById('leaveBtn');
 const toggleMuteBtn=document.getElementById('toggleMute');
@@ -88,84 +89,99 @@ const roomTitle=document.getElementById('roomTitle');
 const roomIdEl=document.getElementById('roomId');
 const channelList=document.getElementById('channelList');
 
-let drone=null, observerRoom=null, room=null, clientId=null, localStream=null;
-let isJoined=false, isMuted=false, currentRoom='general';
-let membersMap={}; // {roomName: [{id,name,joined,muted}]}
+let drone=null;
+let observers={}; // {channelName: observerRoom}
+let currentRoom='general';
+let isJoined=false;
+let isMuted=false;
+let localStream=null;
+let clientId=null;
+let membersMap={}; // {channelName: [{id,name,joined,muted}]}
 
-// Helpers
-function shortId(){return Math.random().toString(36).substring(2,9);}
-function setConn(text){connStatus.textContent=text;}
+// --- Helpers ---
+function shortId(){ return Math.random().toString(36).substring(2,9); }
+function setConn(text){ connStatus.textContent=text; }
 
-// Render participants
+// Render participants of current room
 function renderParticipants(){
   participantsEl.innerHTML='';
-  const members = membersMap[currentRoom] || [];
+  const members = membersMap[currentRoom]||[];
   memberCountEl.textContent = members.length;
 
   members.forEach(m=>{
-    const div = document.createElement('div');
+    const div=document.createElement('div');
     div.className='participant';
-    div.innerHTML = `
+    div.innerHTML=`
       <div class="avatar">${(m.name||'U').slice(0,2).toUpperCase()}</div>
       <div class="pmeta">
         <div class="pname">${m.name||('User-'+m.id.slice(0,4))}</div>
         <div class="pstatus">${m.joined ? (m.muted?'muted':'speaking') : 'not joined'}</div>
       </div>
-      ${m.joined?'<button class="mutebtn">Mute</button>':''}
     `;
     participantsEl.appendChild(div);
   });
 }
 
-// Connect observer to current channel (persistent)
-function connectObserver(){
-  if(observerRoom) observerRoom.unsubscribe();
-  if(!drone) drone = new ScaleDrone(CHANNEL_ID, {data:{name:displayNameInput.value||('Guest-'+shortId())}});
-  drone.on('open', ()=>{setConn('connected'); clientId=drone.clientId;});
-  observerRoom = drone.subscribe('observable-'+currentRoom);
-  observerRoom.on('members', members=>{
-    membersMap[currentRoom] = members.map(m=>({
+// Connect observer to a channel
+function connectObserver(channel){
+  if(observers[channel]) return; // already connected
+  if(!drone) drone = new ScaleDrone(CHANNEL_ID,{data:{name:displayNameInput.value||('Guest-'+shortId())}});
+  drone.on('open', ()=>{ clientId=drone.clientId; setConn('connected'); });
+
+  const observer = drone.subscribe('observable-'+channel);
+  observer.on('members', members=>{
+    membersMap[channel] = members.map(m=>({
       id: m.id,
       name: m.clientData?.name || 'User-'+m.id.slice(0,4),
-      joined: m.id===clientId?isJoined:false,
-      muted: m.id===clientId?isMuted:false
+      joined: false,
+      muted: false
     }));
-    renderParticipants();
+    if(channel===currentRoom) renderParticipants();
   });
+  observer.on('member_join', m=>{
+    if(!membersMap[channel]) membersMap[channel]=[];
+    membersMap[channel].push({id:m.id,name:m.clientData?.name||'User-'+m.id.slice(0,4),joined:false,muted:false});
+    if(channel===currentRoom) renderParticipants();
+  });
+  observer.on('member_leave', m=>{
+    if(!membersMap[channel]) return;
+    membersMap[channel] = membersMap[channel].filter(x=>x.id!==m.id);
+    if(channel===currentRoom) renderParticipants();
+  });
+  observers[channel]=observer;
 }
 
-// Join room (WebRTC)
-function joinRoom(){
+// Join voice (local)
+async function joinRoom(){
   if(isJoined) return;
-  navigator.mediaDevices.getUserMedia({audio:true,video:false}).then(stream=>{
-    localStream=stream; isJoined=true; isMuted=false; micStateEl.textContent='on';
-    toggleMuteBtn.style.display=''; leaveBtn.style.display=''; joinBtn.style.display='none';
-    // mark local member
-    if(!membersMap[currentRoom]) membersMap[currentRoom]=[];
-    let localMember = membersMap[currentRoom].find(m=>m.id===clientId);
-    if(!localMember){ localMember={id:clientId,name:displayNameInput.value||'You',joined:true,muted:false}; membersMap[currentRoom].push(localMember);}
-    else {localMember.joined=true; localMember.muted=false;}
+  try{
+    localStream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    isJoined=true; isMuted=false; micStateEl.textContent='on';
+    joinBtn.style.display='none'; leaveBtn.style.display=''; toggleMuteBtn.style.display='';
+    // mark yourself joined
+    const members = membersMap[currentRoom]||[];
+    const idx = members.findIndex(m=>m.id===clientId);
+    if(idx>=0){ members[idx].joined=true; members[idx].muted=false; }
+    else members.push({id:clientId,name:displayNameInput.value||'You',joined:true,muted:false});
     renderParticipants();
-  }).catch(err=>{alert('Mic access required'); setConn('mic blocked');});
+  }catch(e){ alert('Mic access required'); console.error(e); setConn('mic blocked'); }
 }
 
-// Leave room
 function leaveRoom(){
-  if(localStream) localStream.getTracks().forEach(t=>t.stop()); localStream=null;
-  isJoined=false; isMuted=false;
-  toggleMuteBtn.style.display='none'; leaveBtn.style.display='none'; joinBtn.style.display=''; micStateEl.textContent='off';
-  const localMember = membersMap[currentRoom]?.find(m=>m.id===clientId);
-  if(localMember) localMember.joined=false;
+  if(localStream) localStream.getTracks().forEach(t=>t.stop());
+  localStream=null; isJoined=false; isMuted=false;
+  joinBtn.style.display=''; leaveBtn.style.display='none'; toggleMuteBtn.style.display='none'; micStateEl.textContent='off';
+  const members = membersMap[currentRoom]||[];
+  const me = members.find(m=>m.id===clientId);
+  if(me) me.joined=false;
   renderParticipants();
 }
 
-// Toggle mute
 function toggleMute(){
   if(!localStream) return;
-  isMuted = !isMuted; localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
+  isMuted=!isMuted;
+  localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
   micStateEl.textContent=isMuted?'off':'on';
-  const localMember = membersMap[currentRoom]?.find(m=>m.id===clientId);
-  if(localMember) localMember.muted=isMuted;
   renderParticipants();
 }
 
@@ -175,19 +191,25 @@ channelList.querySelectorAll('.channel').forEach(ch=>{
     if(ch.dataset.room===currentRoom) return;
     channelList.querySelectorAll('.channel').forEach(c=>c.classList.remove('active'));
     ch.classList.add('active');
-    currentRoom = ch.dataset.room;
+    currentRoom=ch.dataset.room;
     roomTitle.textContent='# '+currentRoom;
     roomIdEl.textContent=currentRoom;
-    connectObserver();
+    renderParticipants();
+    connectObserver(currentRoom);
   };
 });
 
-// Initial setup
-joinBtn.onclick=joinRoom; leaveBtn.onclick=leaveRoom; toggleMuteBtn.onclick=toggleMute;
-connectObserver();
+// Initial observer connections
+['general','gaming','lobby','music'].forEach(connectObserver);
 
-// Optional: refresh UI every 2 seconds (to catch muted/speaking changes)
+// Button handlers
+joinBtn.onclick=joinRoom;
+leaveBtn.onclick=leaveRoom;
+toggleMuteBtn.onclick=toggleMute;
+
+// Optional: refresh UI every 2 sec (catch minor updates)
 setInterval(renderParticipants,2000);
+
 </script>
 </body>
 </html>
