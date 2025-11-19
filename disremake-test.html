@@ -3,293 +3,191 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Discord-like Multi-Channel Voice Chat</title>
+<title>Discord-like Voice Chat</title>
 <style>
-  :root{
-    --sidebar:#2f3136; --bg:#36393f; --panel:#2b2d31; --accent:#7289da; --muted:#b9bbbe; --text:#e3e5e8;
-  }
-  html,body{height:100%;margin:0;font-family:Inter,sans-serif;background:var(--bg);color:var(--text);}
-  .app{display:grid;grid-template-columns:260px 1fr;height:100vh;gap:16px;padding:16px;}
-  .sidebar{background:var(--sidebar);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:12px;}
-  .server-title{font-weight:700;color:var(--text);padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.03);}
-  .channels{flex:1;overflow:auto;}
-  .channel{padding:10px;border-radius:8px;margin:6px 0;display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted);}
-  .channel.active{background:rgba(114,137,218,0.12);color:var(--text);font-weight:600;}
-  .main{display:flex;flex-direction:column;gap:12px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06));}
-  .room-header{display:flex;align-items:center;justify-content:space-between;}
-  .room-title{font-size:18px;font-weight:700;}
-  .controls{display:flex;gap:8px;align-items:center;}
-  button{background:var(--panel);border:1px solid rgba(255,255,255,0.03);color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer;}
-  .btn-muted{background:#2a2b2f;color:var(--muted);}
-  .participants{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px;}
-  .participant{background:var(--panel);padding:10px;border-radius:10px;display:flex;gap:10px;align-items:center;}
-  .avatar{width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#5b6bd1);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;}
-  .pmeta{flex:1;min-width:0;}
-  .pname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .pstatus{font-size:12px;color:var(--muted);margin-top:4px;}
-  .small{font-size:13px;color:var(--muted);}
-  .footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid rgba(255,255,255,0.03);margin-top:8px;}
-  .mutebtn{background:#202225;border:1px solid rgba(0,0,0,0.3);color:var(--text);}
-  .leave{background:#2b2b2b;color:#ff8b8b;}
+:root{
+--sidebar:#2f3136; --bg:#36393f; --panel:#2b2d31; --accent:#7289da; --muted:#b9bbbe; --text:#e3e5e8;
+}
+html,body{height:100%;margin:0;font-family:Inter,sans-serif;background:var(--bg);color:var(--text);}
+.app{display:grid;grid-template-columns:260px 1fr;height:100vh;gap:16px;padding:16px;}
+.sidebar{background:var(--sidebar);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:12px;}
+.server-title{font-weight:700;color:var(--text);padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.03);}
+.channels{flex:1;overflow:auto;}
+.channel{padding:10px;border-radius:8px;margin:6px 0;display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted);}
+.channel.active{background:rgba(114,137,218,0.12);color:var(--text);font-weight:600;}
+.main{display:flex;flex-direction:column;gap:12px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06));}
+.room-header{display:flex;align-items:center;justify-content:space-between;}
+.room-title{font-size:18px;font-weight:700;}
+.controls{display:flex;gap:8px;align-items:center;}
+button{background:var(--panel);border:1px solid rgba(255,255,255,0.03);color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer;}
+.mutebtn{background:#202225;border:1px solid rgba(0,0,0,0.3);color:var(--text);}
+.leave{background:#2b2b2b;color:#ff8b8b;}
+.participants{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px;}
+.participant{background:var(--panel);padding:10px;border-radius:10px;display:flex;gap:10px;align-items:center;}
+.avatar{width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#5b6bd1);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;}
+.pmeta{flex:1;min-width:0;}
+.pname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pstatus{font-size:12px;color:var(--muted);margin-top:4px;}
+.small{font-size:13px;color:var(--muted);}
+.footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid rgba(255,255,255,0.03);margin-top:8px;}
 </style>
 </head>
 <body>
 <div class="app">
-  <aside class="sidebar">
-    <div class="server-title">My Voice Server</div>
-    <div class="channels" id="channelList">
-      <div class="channel active" data-room="general">🔊 general</div>
-      <div class="channel" data-room="gaming">🎮 gaming</div>
-      <div class="channel" data-room="lobby">💬 lobby</div>
-      <div class="channel" data-room="music">🎵 music</div>
-    </div>
-    <div style="font-size:13px;color:var(--muted);padding-top:8px;">Status: <span id="connStatus">disconnected</span></div>
-  </aside>
+<aside class="sidebar">
+  <div class="server-title">My Voice Server</div>
+  <div class="channels" id="channelList">
+    <div class="channel active" data-room="general">🔊 general</div>
+    <div class="channel" data-room="gaming">🎮 gaming</div>
+    <div class="channel" data-room="lobby">💬 lobby</div>
+    <div class="channel" data-room="music">🎵 music</div>
+  </div>
+  <div style="font-size:13px;color:var(--muted);padding-top:8px;">Status: <span id="connStatus">disconnected</span></div>
+</aside>
 
-  <main class="main">
-    <div class="room-header">
-      <div>
-        <div class="room-title" id="roomTitle"># general</div>
-        <div class="small">A simple WebRTC voice room.</div>
-      </div>
-      <div class="controls">
-        <div class="small">Mic: <strong id="micState">off</strong></div>
-        <button id="joinBtn">Join</button>
-        <button id="leaveBtn" class="leave" style="display:none">Leave</button>
-        <button id="toggleMute" class="mutebtn" style="display:none">Mute</button>
-      </div>
-    </div>
-
+<main class="main">
+  <div class="room-header">
     <div>
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-weight:700">Participants (<span id="memberCount">0</span>)</div>
-        <div class="small">Click a participant to mute locally</div>
-      </div>
-      <div id="participants" class="participants" aria-live="polite"></div>
+      <div class="room-title" id="roomTitle"># general</div>
+      <div class="small">A simple WebRTC voice room.</div>
     </div>
+    <div class="controls">
+      <div class="small">Mic: <strong id="micState">off</strong></div>
+      <button id="joinBtn">Join</button>
+      <button id="leaveBtn" class="leave" style="display:none">Leave</button>
+      <button id="toggleMute" class="mutebtn" style="display:none">Mute</button>
+    </div>
+  </div>
 
-    <div class="footer">
-      <div class="small">Your name: <input id="displayName" placeholder="Pick a name" style="padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:#222;color:var(--text)"></div>
-      <div class="small">Room ID: <strong id="roomId">general</strong></div>
+  <div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-weight:700">Participants (<span id="memberCount">0</span>)</div>
     </div>
-  </main>
+    <div id="participants" class="participants" aria-live="polite"></div>
+  </div>
+
+  <div class="footer">
+    <div class="small">Your name: <input id="displayName" placeholder="Pick a name" style="padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:#222;color:var(--text)"></div>
+    <div class="small">Room ID: <strong id="roomId">general</strong></div>
+  </div>
+</main>
 </div>
 
 <script src="https://cdn.scaledrone.com/scaledrone.min.js"></script>
 <script>
-const CHANNEL_ID = "YstSSj9UMw4xqYdB"; // replace with your ScaleDrone ID
-const MAX_PARTICIPANTS = 10;
+const CHANNEL_ID="YstSSj9UMw4xqYdB"; // Replace with your ScaleDrone ID
+const joinBtn=document.getElementById('joinBtn');
+const leaveBtn=document.getElementById('leaveBtn');
+const toggleMuteBtn=document.getElementById('toggleMute');
+const micStateEl=document.getElementById('micState');
+const participantsEl=document.getElementById('participants');
+const memberCountEl=document.getElementById('memberCount');
+const connStatus=document.getElementById('connStatus');
+const displayNameInput=document.getElementById('displayName');
+const roomTitle=document.getElementById('roomTitle');
+const roomIdEl=document.getElementById('roomId');
+const channelList=document.getElementById('channelList');
 
-const joinBtn = document.getElementById('joinBtn');
-const leaveBtn = document.getElementById('leaveBtn');
-const toggleMuteBtn = document.getElementById('toggleMute');
-const micStateEl = document.getElementById('micState');
-const participantsEl = document.getElementById('participants');
-const memberCountEl = document.getElementById('memberCount');
-const connStatus = document.getElementById('connStatus');
-const displayNameInput = document.getElementById('displayName');
-const roomTitle = document.getElementById('roomTitle');
-const roomIdEl = document.getElementById('roomId');
-const channelList = document.getElementById('channelList');
+let drone=null, observerRoom=null, room=null, clientId=null, localStream=null;
+let isJoined=false, isMuted=false, currentRoom='general';
+let membersMap={}; // {roomName: [{id,name,joined,muted}]}
 
-let localStream = null;
-let drone = null;
-let room = null;
-let clientId = null;
-let peers = {};
-let isJoined = false;
-let isMuted = false;
-let currentRoom = 'general';
+// Helpers
+function shortId(){return Math.random().toString(36).substring(2,9);}
+function setConn(text){connStatus.textContent=text;}
 
-// --- Helper functions ---
-function shortId(){ return Math.random().toString(36).substring(2,9); }
-
-function setConn(text){ connStatus.textContent = text; }
-
+// Render participants
 function renderParticipants(){
-  participantsEl.innerHTML = '';
-  const ids = Object.keys(peers);
-  memberCountEl.textContent = ids.length + (isJoined ? 1 : 0);
+  participantsEl.innerHTML='';
+  const members = membersMap[currentRoom] || [];
+  memberCountEl.textContent = members.length;
 
-  // local tile
-  if(isJoined){
-    const localTile = document.createElement('div');
-    localTile.className = 'participant';
-    localTile.innerHTML = `
-      <div class="avatar">You</div>
+  members.forEach(m=>{
+    const div = document.createElement('div');
+    div.className='participant';
+    div.innerHTML = `
+      <div class="avatar">${(m.name||'U').slice(0,2).toUpperCase()}</div>
       <div class="pmeta">
-        <div class="pname">${displayNameInput.value || 'You (local)'}</div>
-        <div class="pstatus">${isMuted ? 'muted' : 'speaking'}</div>
+        <div class="pname">${m.name||('User-'+m.id.slice(0,4))}</div>
+        <div class="pstatus">${m.joined ? (m.muted?'muted':'speaking') : 'not joined'}</div>
       </div>
-      <div>
-        <button id="localToggle" class="mutebtn">${isMuted?'Unmute':'Mute'}</button>
-      </div>
+      ${m.joined?'<button class="mutebtn">Mute</button>':''}
     `;
-    participantsEl.appendChild(localTile);
-    localTile.querySelector('#localToggle').onclick = toggleLocalMute;
-  }
-
-  ids.slice(0,MAX_PARTICIPANTS).forEach(id=>{
-    const p = peers[id];
-    const tile = document.createElement('div');
-    tile.className = 'participant';
-    tile.dataset.client = id;
-    tile.innerHTML = `
-      <div class="avatar">${(p.name||'U').slice(0,2).toUpperCase()}</div>
-      <div class="pmeta">
-        <div class="pname">${p.name||('User-'+id.slice(0,4))}</div>
-        <div class="pstatus" id="status-${id}">connected</div>
-      </div>
-      <div>
-        <button class="mutebtn" data-id="${id}">Mute</button>
-      </div>
-    `;
-    participantsEl.appendChild(tile);
-    tile.querySelector('button').addEventListener('click', ()=>{
-      const audio = p.audioEl;
-      if(!audio) return;
-      audio.muted = !audio.muted;
-      tile.querySelector('button').textContent = audio.muted?'Unmute':'Mute';
-    });
+    participantsEl.appendChild(div);
   });
 }
 
-function toggleLocalMute(){
-  if(!localStream) return;
-  isMuted = !isMuted;
-  localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
-  micStateEl.textContent = isMuted?'off':'on';
-  toggleMuteBtn.textContent = isMuted?'Unmute':'Mute';
-  renderParticipants();
-}
-
-function createAudioEl(stream,id){
-  const audio = document.createElement('audio');
-  audio.autoplay = true;
-  audio.playsInline = true;
-  audio.srcObject = stream;
-  audio.style.display='none';
-  document.body.appendChild(audio);
-  return audio;
-}
-
-function closePeer(id){
-  if(!peers[id]) return;
-  try{ peers[id].pc.close(); } catch(e){}
-  if(peers[id].audioEl) peers[id].audioEl.remove();
-  delete peers[id];
-  renderParticipants();
-}
-
-function leaveRoom(){
-  Object.keys(peers).forEach(id=>closePeer(id));
-  peers={};
-  if(localStream) localStream.getTracks().forEach(t=>t.stop());
-  localStream=null;
-  if(room) try{ room.unsubscribe(); } catch(e){}
-  if(drone) try{ drone.close(); } catch(e){}
-  drone=null; room=null; clientId=null; isJoined=false; isMuted=false;
-  micStateEl.textContent='off'; toggleMuteBtn.style.display='none';
-  leaveBtn.style.display='none'; joinBtn.style.display='';
-  setConn('disconnected');
-  renderParticipants();
-}
-
-// --- WebRTC / ScaleDrone ---
-async function joinRoom(){
-  if(!CHANNEL_ID || CHANNEL_ID==='YOUR_CHANNEL_ID'){ alert('Replace CHANNEL_ID with your ScaleDrone ID'); return; }
-  if(isJoined) return;
-
-  drone = new ScaleDrone(CHANNEL_ID,{data:{name:displayNameInput.value||('Guest-'+shortId())}});
-  setConn('connecting');
-  drone.on('open',err=>{
-    if(err){ console.error(err); setConn('error'); return; }
-    setConn('connected to signaling'); clientId=drone.clientId;
-
-    room = drone.subscribe('observable-'+currentRoom);
-
-    room.on('open',err=>{ if(err) console.error('room open error',err); });
-    room.on('members',m=>{ renderParticipants(); });
-    room.on('data',(message,member)=>{
-      if(!member) return; const from=member.id; if(from===clientId) return;
-      if(typeof message!=='object'||!message.type) return;
-      if(message.type==='offer'){
-        const pc=preparePeer(from,false);
-        pc.setRemoteDescription(new RTCSessionDescription(message.sdp)).then(()=>pc.createAnswer())
-          .then(answer=>pc.setLocalDescription(answer))
-          .then(()=>drone.publish({room:'observable-'+currentRoom,message:{type:'answer',sdp:pc.localDescription,name:message.name}}))
-          .catch(console.error);
-      } else if(message.type==='answer'){
-        const pcObj=peers[from]; if(pcObj&&pcObj.pc) pcObj.pc.setRemoteDescription(new RTCSessionDescription(message.sdp)).catch(console.error);
-      } else if(message.type==='candidate'){
-        const pcObj=peers[from]; if(pcObj&&pcObj.pc) pcObj.pc.addIceCandidate(new RTCIceCandidate(message.candidate)).catch(console.error);
-      }
-    });
-
-    navigator.mediaDevices.getUserMedia({audio:true,video:false})
-      .then(stream=>{
-        localStream=stream; isMuted=false; micStateEl.textContent='on';
-        toggleMuteBtn.style.display=''; leaveBtn.style.display=''; joinBtn.style.display='none'; isJoined=true;
-        renderParticipants();
-        const members = room.members||[];
-        members.forEach(member=>{ if(member.id!==clientId) createOffer(member.id,member.clientData?.name); });
-        room.on('member_join',m=>{ if(m.id!==clientId) createOffer(m.id,m.clientData?.name); });
-      })
-      .catch(err=>{ console.error(err); alert('Mic required'); setConn('mic blocked'); });
-
-  });
-  drone.on('close',()=>setConn('closed'));
-  drone.on('error',err=>{ console.error(err); setConn('error'); });
-}
-
-function preparePeer(id,isOfferer=true){
-  if(peers[id]?.pc) return peers[id].pc;
-  const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
-  peers[id]=peers[id]||{pc,audioEl:null,name:''}; peers[id].pc=pc;
-  if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-  pc.onicecandidate=e=>{ if(e.candidate) drone.publish({room:'observable-'+currentRoom,message:{type:'candidate',candidate:e.candidate}}); };
-  pc.ontrack=e=>{
-    const stream = e.streams && e.streams[0]?e.streams[0]:new MediaStream(e.track?[e.track]:[]);
-    peers[id].audioEl=createAudioEl(stream,id);
-    peers[id].name=peers[id].name||('User-'+id.slice(0,4));
+// Connect observer to current channel (persistent)
+function connectObserver(){
+  if(observerRoom) observerRoom.unsubscribe();
+  if(!drone) drone = new ScaleDrone(CHANNEL_ID, {data:{name:displayNameInput.value||('Guest-'+shortId())}});
+  drone.on('open', ()=>{setConn('connected'); clientId=drone.clientId;});
+  observerRoom = drone.subscribe('observable-'+currentRoom);
+  observerRoom.on('members', members=>{
+    membersMap[currentRoom] = members.map(m=>({
+      id: m.id,
+      name: m.clientData?.name || 'User-'+m.id.slice(0,4),
+      joined: m.id===clientId?isJoined:false,
+      muted: m.id===clientId?isMuted:false
+    }));
     renderParticipants();
-  };
-  pc.onconnectionstatechange=()=>{ if(['failed','disconnected','closed'].includes(pc.connectionState)) closePeer(id); };
-  return pc;
+  });
 }
 
-async function createOffer(id,name){
-  const pc=preparePeer(id,true); peers[id].name=name||peers[id].name||('User-'+id.slice(0,4));
-  try{ const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
-    drone.publish({room:'observable-'+currentRoom,message:{type:'offer',sdp:pc.localDescription,name:displayNameInput.value||('Guest-'+shortId())}});
-  } catch(e){ console.error('Offer error',e); }
+// Join room (WebRTC)
+function joinRoom(){
+  if(isJoined) return;
+  navigator.mediaDevices.getUserMedia({audio:true,video:false}).then(stream=>{
+    localStream=stream; isJoined=true; isMuted=false; micStateEl.textContent='on';
+    toggleMuteBtn.style.display=''; leaveBtn.style.display=''; joinBtn.style.display='none';
+    // mark local member
+    if(!membersMap[currentRoom]) membersMap[currentRoom]=[];
+    let localMember = membersMap[currentRoom].find(m=>m.id===clientId);
+    if(!localMember){ localMember={id:clientId,name:displayNameInput.value||'You',joined:true,muted:false}; membersMap[currentRoom].push(localMember);}
+    else {localMember.joined=true; localMember.muted=false;}
+    renderParticipants();
+  }).catch(err=>{alert('Mic access required'); setConn('mic blocked');});
 }
 
-// --- Buttons ---
-joinBtn.onclick=()=>{ joinRoom(); if(location.protocol!=='https:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1') console.warn('WebRTC requires HTTPS'); };
-leaveBtn.onclick=leaveRoom; toggleMuteBtn.onclick=toggleLocalMute;
+// Leave room
+function leaveRoom(){
+  if(localStream) localStream.getTracks().forEach(t=>t.stop()); localStream=null;
+  isJoined=false; isMuted=false;
+  toggleMuteBtn.style.display='none'; leaveBtn.style.display='none'; joinBtn.style.display=''; micStateEl.textContent='off';
+  const localMember = membersMap[currentRoom]?.find(m=>m.id===clientId);
+  if(localMember) localMember.joined=false;
+  renderParticipants();
+}
 
-// --- Channel switching ---
+// Toggle mute
+function toggleMute(){
+  if(!localStream) return;
+  isMuted = !isMuted; localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
+  micStateEl.textContent=isMuted?'off':'on';
+  const localMember = membersMap[currentRoom]?.find(m=>m.id===clientId);
+  if(localMember) localMember.muted=isMuted;
+  renderParticipants();
+}
+
+// Channel switching
 channelList.querySelectorAll('.channel').forEach(ch=>{
   ch.onclick=()=>{
     if(ch.dataset.room===currentRoom) return;
-    // switch highlight
     channelList.querySelectorAll('.channel').forEach(c=>c.classList.remove('active'));
     ch.classList.add('active');
-    currentRoom=ch.dataset.room;
+    currentRoom = ch.dataset.room;
     roomTitle.textContent='# '+currentRoom;
     roomIdEl.textContent=currentRoom;
-    // leave current room if joined
-    if(isJoined) leaveRoom();
+    connectObserver();
   };
 });
 
-renderParticipants(); setConn('idle');
-</script>
-   <script>
-   window.onload = function() {
-      alert("Welcome to the all new Voice Chat for BI6ZONE. There are still a few bugs such as not being able to see user count in channels while not in one so to find out if there are people in a channel, you will need to join it. Other than that, thats about it. Enjoy!");
-    };
+// Initial setup
+joinBtn.onclick=joinRoom; leaveBtn.onclick=leaveRoom; toggleMuteBtn.onclick=toggleMute;
+connectObserver();
+
+// Optional: refresh UI every 2 seconds (to catch muted/speaking changes)
+setInterval(renderParticipants,2000);
 </script>
 </body>
 </html>
