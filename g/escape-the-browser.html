@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape the Browser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1e1e1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #fff;
+        }
+
+        .browser-window {
+            width: 90%;
+            max-width: 900px;
+            height: 90vh;
+            background: #2d2d2d;
+            border: 2px solid #555;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .browser-top {
+            background: #3d3d3d;
+            padding: 10px;
+            border-bottom: 1px solid #555;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .browser-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .close-btn { background: #ff5555; }
+        .minimize-btn { background: #ffaa00; }
+        .maximize-btn { background: #55ff55; }
+
+        .url-bar {
+            flex: 1;
+            padding: 8px 12px;
+            background: #1e1e1e;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #aaa;
+            font-size: 12px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .game-area {
+            flex: 1;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .game-canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #00d9ff;
+            border-radius: 2px;
+            box-shadow: 0 0 10px #00d9ff;
+        }
+
+        .popup {
+            position: absolute;
+            background: #f0f0f0;
+            color: #000;
+            padding: 20px;
+            border-radius: 4px;
+            border: 2px solid #ff5555;
+            box-shadow: 0 0 15px rgba(255, 85, 85, 0.6);
+            min-width: 150px;
+            font-size: 12px;
+            text-align: center;
+            animation: shake 0.3s;
+        }
+
+        .popup-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #ff5555;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .cookie {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #d4af37;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #d4af37;
+            cursor: pointer;
+        }
+
+        .cookie::before,
+        .cookie::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #8b6f47;
+            border-radius: 50%;
+        }
+
+        .cookie::before {
+            top: 8px;
+            left: 5px;
+        }
+
+        .cookie::after {
+            bottom: 8px;
+            right: 8px;
+        }
+
+        .ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #00d9ff;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 100;
+        }
+
+        .level-indicator {
+            color: #55ff55;
+            margin-top: 5px;
+        }
+
+        .tab {
+            position: absolute;
+            width: 100px;
+            height: 30px;
+            background: #2d2d2d;
+            border: 1px solid #555;
+            top: 0;
+            color: #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .tab.active {
+            background: #1e1e1e;
+            color: #fff;
+            border-bottom: 2px solid #00d9ff;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 1000;
+            display: none;
+            border: 3px solid #00d9ff;
+        }
+
+        .game-over h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #00d9ff;
+        }
+
+        .game-over p {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .game-over button {
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: #00d9ff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .game-over button:hover {
+            background: #00a8cc;
+        }
+    </style>
+</head>
+<body>
+    <div class="browser-window">
+        <div class="browser-top">
+            <div class="browser-buttons">
+                <button class="btn-small close-btn"></button>
+                <button class="btn-small minimize-btn"></button>
+                <button class="btn-small maximize-btn"></button>
+            </div>
+            <div class="url-bar">chrome://escape-the-browser</div>
+        </div>
+        <div class="game-area">
+            <div class="game-canvas" id="gameCanvas">
+                <div class="ui">
+                    <div>Cookies: <span id="cookieCount">0</span>/5</div>
+                    <div class="level-indicator">Level: <span id="level">1</span></div>
+                </div>
+            </div>
+            <div class="game-over" id="gameOver">
+                <h1 id="gameOverTitle">You Escaped!</h1>
+                <p id="gameOverText"></p>
+                <button onclick="location.reload()">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const gameCanvas = document.getElementById('gameCanvas');
+        const gameOverScreen = document.getElementById('gameOver');
+        const cookieCountDisplay = document.getElementById('cookieCount');
+        const levelDisplay = document.getElementById('level');
+
+        let gameState = {
+            playerX: 450,
+            playerY: 400,
+            cookiesCollected: 0,
+            level: 1,
+            gameWon: false,
+            popupPositions: []
+        };
+
+        const KEYS = {};
+        window.addEventListener('keydown', (e) => KEYS[e.key] = true);
+        window.addEventListener('keyup', (e) => KEYS[e.key] = false);
+
+        function createElement(tag, className, style = {}) {
+            const el = document.createElement(tag);
+            if (className) el.className = className;
+            Object.assign(el.style, style);
+            return el;
+        }
+
+        function createPlayer() {
+            const player = createElement('div', 'player');
+            player.id = 'player';
+            gameCanvas.appendChild(player);
+        }
+
+        function createPopup(x, y) {
+            const popup = createElement('div', 'popup');
+            popup.innerHTML = `<div class="popup-title">⚠️ ERROR!</div>`;
+            popup.innerHTML += `<div>Click to close</div>`;
+            popup.style.left = x + 'px';
+            popup.style.top = y + 'px';
+            popup.onclick = () => popup.remove();
+            gameCanvas.appendChild(popup);
+            gameState.popupPositions.push({ el: popup, x, y });
+        }
+
+        function createCookie(x, y) {
+            const cookie = createElement('div', 'cookie');
+            cookie.style.left = x + 'px';
+            cookie.style.top = y + 'px';
+            cookie.onclick = (e) => {
+                e.stopPropagation();
+                gameState.cookiesCollected++;
+                cookieCountDisplay.textContent = gameState.cookiesCollected;
+                cookie.remove();
+                if (gameState.cookiesCollected >= 5) {
+                    winGame();
+                }
+            };
+            gameCanvas.appendChild(cookie);
+        }
+
+        function updatePlayerPosition() {
+            const speed = 5;
+            const player = document.getElementById('player');
+
+            if (KEYS['ArrowUp'] || KEYS['w']) gameState.playerY -= speed;
+            if (KEYS['ArrowDown'] || KEYS['s']) gameState.playerY += speed;
+            if (KEYS['ArrowLeft'] || KEYS['a']) gameState.playerX -= speed;
+            if (KEYS['ArrowRight'] || KEYS['d']) gameState.playerX += speed;
+
+            // Boundaries
+            gameState.playerX = Math.max(0, Math.min(gameState.playerX, gameCanvas.offsetWidth - 30));
+            gameState.playerY = Math.max(0, Math.min(gameState.playerY, gameCanvas.offsetHeight - 30));
+
+            player.style.left = gameState.playerX + 'px';
+            player.style.top = gameState.playerY + 'px';
+        }
+
+        function checkCollisions() {
+            const cookies = document.querySelectorAll('.cookie');
+            cookies.forEach(cookie => {
+                const cookieRect = cookie.getBoundingClientRect();
+                const playerRect = document.getElementById('player').getBoundingClientRect();
+                if (playerRect.left < cookieRect.right &&
+                    playerRect.right > cookieRect.left &&
+                    playerRect.top < cookieRect.bottom &&
+                    playerRect.bottom > cookieRect.top) {
+                    cookie.click();
+                }
+            });
+        }
+
+        function winGame() {
+            gameState.gameWon = true;
+            gameOverScreen.style.display = 'block';
+            document.getElementById('gameOverTitle').textContent = '🎉 You Escaped!';
+            document.getElementById('gameOverText').innerHTML = `You collected all cookies in Level ${gameState.level}!<br>Amazing job closing all those popups!`;
+        }
+
+        function gameLoop() {
+            updatePlayerPosition();
+            checkCollisions();
+            if (!gameState.gameWon) requestAnimationFrame(gameLoop);
+        }
+
+        function initializeLevel() {
+            // Clear existing popups and cookies
+            document.querySelectorAll('.popup').forEach(p => p.remove());
+            document.querySelectorAll('.cookie').forEach(c => c.remove());
+
+            // Spawn popups
+            const popupCount = 3 + gameState.level;
+            for (let i = 0; i < popupCount; i++) {
+                const x = Math.random() * (gameCanvas.offsetWidth - 150);
+                const y = Math.random() * (gameCanvas.offsetHeight - 100);
+                createPopup(x, y);
+            }
+
+            // Spawn cookies
+            for (let i = 0; i < 5; i++) {
+                const x = Math.random() * (gameCanvas.offsetWidth - 20);
+                const y = Math.random() * (gameCanvas.offsetHeight - 20);
+                createCookie(x, y);
+            }
+        }
+
+        // Initialize game
+        createPlayer();
+        initializeLevel();
+        gameLoop();
+    </script>
+</body>
+</html>
