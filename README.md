@@ -1,3 +1,8 @@
+THIS REPO HAS BEEN ARCHIVED AND DEVELOPMENT HAS BEEN DISCONTINUED. VIEW MY NEWER PROJECT IN MY GITHUB THAT IS A REFORM OF THIS SITE CALLED MOONLIGHT
+https://github.com/BI66IE619/Moonlight/tree/main
+https://moonlight.pages.dev
+
+
 # 🎮 BI6ZONE
 
 Welcome to **BI6ZONE**, a centralized hub for unblocked games, applications, media streaming, music, and secure browsing.
